@@ -1,0 +1,120 @@
+name: iOS build & TestFlight upload
+
+# Runs on GitHub's hosted macOS runner so this can ship without ever owning a Mac.
+# Triggers on every push to main, plus a manual button (Actions tab -> this workflow
+# -> Run workflow) for re-running without a new commit.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  build-and-upload:
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project from project.yml
+        run: xcodegen generate
+
+      # --- Signing: import the Apple Distribution certificate into a throwaway
+      # keychain built just for this run. Nothing here persists past the job. ---
+      - name: Import signing certificate
+        env:
+          BUILD_CERTIFICATE_P12: ${{ secrets.BUILD_CERTIFICATE_P12 }}
+          P12_PASSWORD: ${{ secrets.P12_PASSWORD }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          CERT_PATH="$RUNNER_TEMP/distribution.p12"
+
+          echo -n "$BUILD_CERTIFICATE_P12" | base64 --decode -o "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security import "$CERT_PATH" -P "$P12_PASSWORD" -A \
+            -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychain -d user -s "$KEYCHAIN_PATH" \
+            "$(security list-keychains -d user | sed 's/"//g' | xargs)"
+
+      # --- App Store Connect API key: used both for automatic provisioning-profile
+      # management (xcodebuild -allowProvisioningUpdates) and the TestFlight upload
+      # at the end. Written where xcodebuild/altool expect to find it. ---
+      - name: Write App Store Connect API key
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_PRIVATE_KEY: ${{ secrets.APPSTORE_API_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/private_keys
+          echo "$APPSTORE_API_PRIVATE_KEY" > ~/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8
+
+      - name: Archive
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          xcodebuild archive \
+            -project MtLogos.xcodeproj \
+            -scheme MtLogos \
+            -configuration Release \
+            -archivePath "$RUNNER_TEMP/MtLogos.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$HOME/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8" \
+            -authenticationKeyID "$APPSTORE_API_KEY_ID" \
+            -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID"
+
+      - name: Export .ipa
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>QKPAT27SX9</string>
+            <key>signingStyle</key><string>automatic</string>
+          </dict>
+          </plist>
+          EOF
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/MtLogos.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$HOME/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8" \
+            -authenticationKeyID "$APPSTORE_API_KEY_ID" \
+            -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID"
+
+      - name: Upload to TestFlight
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+        run: |
+          set -euo pipefail
+          IPA=$(find "$RUNNER_TEMP/export" -name '*.ipa' | head -n1)
+          xcrun altool --upload-app -f "$IPA" -t ios \
+            --apiKey "$APPSTORE_API_KEY_ID" --apiIssuer "$APPSTORE_API_ISSUER_ID"
+
+      - name: Upload build artifacts (for debugging a failed run)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-output
+          path: |
+            ${{ runner.temp }}/export
+          retention-days: 5
+          if-no-files-found: ignore

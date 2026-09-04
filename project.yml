@@ -1,0 +1,48 @@
+# XcodeGen spec — generates MtLogos.xcodeproj at CI build time so nobody has to
+# hand-author (or hand-edit) a project.pbxproj on a machine that doesn't have Xcode.
+# The GitHub Actions workflow runs `xcodegen generate` before `xcodebuild`; there is
+# no committed .xcodeproj in this repo on purpose — this file is the single source
+# of truth for it.
+name: MtLogos
+options:
+  bundleIdPrefix: com.mtlogos
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+
+targets:
+  MtLogos:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Sources
+    resources:
+      - path: Resources/Assets.xcassets
+    info:
+      path: Generated/Info.plist
+      properties:
+        CFBundleDisplayName: Mt. Logos
+        UILaunchScreen: {}
+        UIStatusBarStyle: UIStatusBarStyleLightContent
+        UIViewControllerBasedStatusBarAppearance: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        # zxing.min.js (QR/barcode scan) and the meal-photo macro feature both use
+        # the camera from inside the web app. WKWebView's file-input camera option
+        # needs this key on the HOST app or it silently fails, regardless of which
+        # in-page feature triggers it.
+        NSCameraUsageDescription: "Mt. Logos uses your camera to scan QR codes and take meal or gym photos within the app."
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mtlogos.app
+        PRODUCT_NAME: "Mt. Logos"
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"          # iPhone only
+        DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
+        CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: true
+        ENABLE_PREVIEWS: false
