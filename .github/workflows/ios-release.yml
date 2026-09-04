@@ -101,7 +101,12 @@ jobs:
           <dict>
             <key>method</key><string>app-store-connect</string>
             <key>teamID</key><string>QKPAT27SX9</string>
-            <key>signingStyle</key><string>automatic</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.mtlogos.app</key>
+              <string>Mt Logos App Store</string>
+            </dict>
           </dict>
           </plist>
           EOF
