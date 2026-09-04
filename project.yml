@@ -42,17 +42,19 @@ targets:
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
-        CODE_SIGN_STYLE: Automatic
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: true
         ENABLE_PREVIEWS: false
-        # iOS-only, explicitly - stops Xcode from also offering "My Mac (Designed
-        # for iPad)" as a build destination, which was making `xcodebuild archive`
-        # pick an ambiguous destination and, with it, the wrong (Development)
-        # signing intent. (Do NOT also set CODE_SIGN_IDENTITY here - Automatic
-        # signing picks Development vs Distribution based on the build ACTION
-        # once the destination is unambiguous, and setting CODE_SIGN_IDENTITY
-        # manually conflicts with CODE_SIGN_STYLE=Automatic outright - Xcode
-        # errors on that combination by design.)
         SUPPORTS_MACCATALYST: false
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: false
+        # Manual signing, stated explicitly, instead of CODE_SIGN_STYLE=Automatic.
+        # Automatic signing's Development-vs-Distribution inference proved
+        # unreliable for `xcodebuild archive` in this project (repeatedly asked
+        # for a Development profile requiring registered test devices, even for
+        # an archive build, and errors if CODE_SIGN_IDENTITY is set alongside
+        # it). Manual + an explicit Distribution identity removes that guesswork
+        # entirely — `-allowProvisioningUpdates` on the xcodebuild command still
+        # auto-creates/downloads the matching profile via the API key, it just no
+        # longer has to GUESS which kind to make.
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Apple Distribution"
