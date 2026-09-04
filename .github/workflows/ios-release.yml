@@ -33,7 +33,9 @@ jobs:
           KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
           CERT_PATH="$RUNNER_TEMP/distribution.p12"
 
-          echo -n "$BUILD_CERTIFICATE_P12" | base64 --decode -o "$CERT_PATH"
+          # macOS ships BSD base64, not GNU coreutils - it's "-D" for decode, not
+          # "--decode", and long-form GNU flags aren't recognized at all.
+          echo -n "$BUILD_CERTIFICATE_P12" | base64 -D > "$CERT_PATH"
 
           security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
