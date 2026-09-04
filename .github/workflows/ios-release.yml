@@ -10,10 +10,22 @@ on:
 
 jobs:
   build-and-upload:
-    runs-on: macos-14
+    runs-on: macos-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+
+      # Homebrew always installs the LATEST xcodegen, which writes the newest
+      # project-file format it knows. Pin to whichever Xcode is actually newest
+      # on this runner instead of trusting its default (macos-14 defaulted to
+      # 15.4 while newer Xcodes sat right next to it unused, and xcodegen's
+      # output was too new for 15.4 to open at all).
+      - name: Select latest available Xcode
+        run: |
+          LATEST=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -n1)
+          echo "Selecting $LATEST"
+          sudo xcode-select -s "$LATEST/Contents/Developer"
+          xcodebuild -version
 
       - name: Install XcodeGen
         run: brew install xcodegen
