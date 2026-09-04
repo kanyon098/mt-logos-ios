@@ -17,7 +17,11 @@ targets:
     deploymentTarget: "16.0"
     sources:
       - path: Sources
-    resources:
+      # .xcassets must be listed under `sources`, not `resources` - under
+      # `resources` XcodeGen adds it as a plain folder reference (copied
+      # verbatim, never run through Xcode's asset-catalog compiler), which is
+      # why the icons silently never made it into the built app at all (no
+      # Assets.car in the .ipa, despite the files existing on disk).
       - path: Resources/Assets.xcassets
     info:
       path: Generated/Info.plist
