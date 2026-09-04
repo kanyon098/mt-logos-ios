@@ -33,6 +33,7 @@ targets:
         # needs this key on the HOST app or it silently fails, regardless of which
         # in-page feature triggers it.
         NSCameraUsageDescription: "Mt. Logos uses your camera to scan QR codes and take meal or gym photos within the app."
+        CFBundleIconName: AppIcon
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mtlogos.app
@@ -43,7 +44,6 @@ targets:
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: true
         ENABLE_PREVIEWS: false
         SUPPORTS_MACCATALYST: false
         SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: false
