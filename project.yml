@@ -46,12 +46,13 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS: true
         ENABLE_PREVIEWS: false
-      configs:
-        # Without this override, automatic signing defaulted to a Development
-        # profile for `archive` too — which then demanded registered test device
-        # UDIDs ("your team has no devices...") instead of using the Apple
-        # Distribution certificate that's actually imported in CI. This pins the
-        # Release configuration (what `-configuration Release archive` builds)
-        # to Distribution signing specifically.
-        Release:
-          CODE_SIGN_IDENTITY: "Apple Distribution"
+        # iOS-only, explicitly - stops Xcode from also offering "My Mac (Designed
+        # for iPad)" as a build destination, which was making `xcodebuild archive`
+        # pick an ambiguous destination and, with it, the wrong (Development)
+        # signing intent. (Do NOT also set CODE_SIGN_IDENTITY here - Automatic
+        # signing picks Development vs Distribution based on the build ACTION
+        # once the destination is unambiguous, and setting CODE_SIGN_IDENTITY
+        # manually conflicts with CODE_SIGN_STYLE=Automatic outright - Xcode
+        # errors on that combination by design.)
+        SUPPORTS_MACCATALYST: false
+        SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD: false

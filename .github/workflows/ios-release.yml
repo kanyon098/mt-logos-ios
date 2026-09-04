@@ -81,6 +81,7 @@ jobs:
             -project MtLogos.xcodeproj \
             -scheme MtLogos \
             -configuration Release \
+            -destination "generic/platform=iOS" \
             -archivePath "$RUNNER_TEMP/MtLogos.xcarchive" \
             -allowProvisioningUpdates \
             -authenticationKeyPath "$HOME/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8" \
