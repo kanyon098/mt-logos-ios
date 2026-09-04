@@ -58,3 +58,7 @@ targets:
         # longer has to GUESS which kind to make.
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "Apple Distribution"
+        # Manual style needs a profile NAME to act on. This one doesn't exist yet -
+        # -allowProvisioningUpdates on the archive command creates it on first run
+        # (App Store distribution profile for com.mtlogos.app) and reuses it after.
+        PROVISIONING_PROFILE_SPECIFIER: "Mt Logos App Store"
