@@ -88,6 +88,58 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         loadFailed = false
     }
+
+    // MARK: - WKUIDelegate: JS alert/confirm/prompt
+
+    // Conforming to WKUIDelegate and setting webView.uiDelegate above is NOT enough on
+    // its own — these three panel methods are each individually optional, and WKWebView
+    // silently no-ops (alert: nothing shown, just completes; confirm/prompt: completes
+    // as cancelled/nil) for any of them that isn't actually implemented. That is exactly
+    // what made every window.confirm()/alert()/prompt() in the web app do nothing at all
+    // inside this wrapper — reported 2026-09-12 as "the Gym Log delete button does
+    // nothing" (confirm()), and the web app's own appConfirm()/appConfirmAsync() JS-side
+    // workaround (mtλapp.html) exists because of this exact gap. Implementing the real
+    // panels here fixes it at the source — for every confirm()/alert()/prompt() call
+    // site, present and future, not just the ones patched on the JS side.
+    private func topViewController() -> UIViewController? {
+        guard let scene = UIApplication.shared.connectedScenes
+                .first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene,
+              let root = scene.windows.first(where: { $0.isKeyWindow })?.rootViewController
+        else { return nil }
+        var top = root
+        while let presented = top.presentedViewController { top = presented }
+        return top
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptAlertPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping () -> Void) {
+        guard let vc = topViewController() else { completionHandler(); return }
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler() })
+        vc.present(alert, animated: true)
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptConfirmPanelWithMessage message: String,
+                 initiatedByFrame frame: WKFrameInfo, completionHandler: @escaping (Bool) -> Void) {
+        guard let vc = topViewController() else { completionHandler(false); return }
+        let alert = UIAlertController(title: nil, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(false) })
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in completionHandler(true) })
+        vc.present(alert, animated: true)
+    }
+
+    func webView(_ webView: WKWebView, runJavaScriptTextInputPanelWithPrompt prompt: String,
+                 defaultText: String?, initiatedByFrame frame: WKFrameInfo,
+                 completionHandler: @escaping (String?) -> Void) {
+        guard let vc = topViewController() else { completionHandler(nil); return }
+        let alert = UIAlertController(title: nil, message: prompt, preferredStyle: .alert)
+        alert.addTextField { $0.text = defaultText }
+        alert.addAction(UIAlertAction(title: "Cancel", style: .cancel) { _ in completionHandler(nil) })
+        alert.addAction(UIAlertAction(title: "OK", style: .default) { _ in
+            completionHandler(alert.textFields?.first?.text)
+        })
+        vc.present(alert, animated: true)
+    }
 }
 
 private struct WebViewRepresentable: UIViewRepresentable {
@@ -106,7 +158,18 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             brandBackground.ignoresSafeArea()
+            // Reported 2026-09-12: "doesn't fill the screen... looks cheap." Without
+            // .ignoresSafeArea() here, SwiftUI constrains the WKWebView itself to the
+            // safe area, leaving a strip of brandBackground showing at the top/bottom
+            // instead of real page content — even though the web app (mtλapp.html) is
+            // already built to handle this ITSELF via CSS env(safe-area-inset-*) on
+            // every full-screen surface and popup (see .home-screen, .overlay, etc. —
+            // viewport-fit=cover is set precisely so those resolve to real values). The
+            // web page already keeps its own popups/buttons clear of the status bar and
+            // home indicator; the native side just needs to get out of the way and let
+            // the page extend edge to edge like it was designed to.
             WebViewRepresentable(store: store)
+                .ignoresSafeArea()
                 .opacity(store.loadFailed ? 0 : 1)
             if store.loadFailed {
                 OfflineView(retry: store.load)
