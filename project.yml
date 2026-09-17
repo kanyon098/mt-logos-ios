@@ -42,11 +42,18 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mtlogos.app
         PRODUCT_NAME: "Mt. Logos"
-        MARKETING_VERSION: "1.0"
-        # Bumped from "1" — Apple rejects re-uploading the same (version, build) pair,
-        # and 1.0 (1) is the build already sitting on TestFlight (uploaded 2026-09-04).
-        # Bump this every time a new build actually gets pushed to main.
-        CURRENT_PROJECT_VERSION: "2"
+        # Bumped from "1.0" 2026-09-17. Once a version is APPROVED on the App Store,
+        # Apple closes that "pre-release train" — every further upload under the same
+        # MARKETING_VERSION is rejected outright (error 90062 "must contain a higher
+        # version than that of the previously approved version", plus 90186 "train
+        # version '1.0' is closed for new build submissions"), no matter what the
+        # build number is. So this has to move for any new release, not just the
+        # build number below.
+        MARKETING_VERSION: "1.0.1"
+        # Apple rejects re-uploading the same (version, build) pair. Bump this every
+        # time a new build is pushed to main; reset to "1" alongside a new
+        # MARKETING_VERSION if you prefer, but never reuse a pair.
+        CURRENT_PROJECT_VERSION: "3"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
