@@ -26,6 +26,16 @@ targets:
     info:
       path: Generated/Info.plist
       properties:
+        # Declared EXPLICITLY, as build-setting references, because XcodeGen fills in
+        # its own defaults for any Info.plist key you don't list — and its default for
+        # CFBundleShortVersionString is a literal "1.0". That is why bumping
+        # MARKETING_VERSION below alone did nothing: the setting changed, the generated
+        # plist still said 1.0, and Apple rejected the upload with 90062/90186 quoting
+        # a version this file no longer contained anywhere. Pointing the keys at the
+        # settings is what a normal Xcode project does, and it keeps the two in step
+        # permanently instead of needing both edited by hand.
+        CFBundleShortVersionString: "$(MARKETING_VERSION)"
+        CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         CFBundleDisplayName: Mt. Logos
         UILaunchScreen: {}
         UIStatusBarStyle: UIStatusBarStyleLightContent
