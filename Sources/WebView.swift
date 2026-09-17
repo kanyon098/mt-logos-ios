@@ -34,6 +34,21 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         webView.allowsBackForwardNavigationGestures = true
         webView.customUserAgent = Self.userAgent
 
+        /* THE OTHER HALF of filling the screen. `.ignoresSafeArea()` in ContentView
+           (see its comment) makes the web VIEW span the whole display — but the
+           scroll view inside it still defaults to .automatic, which quietly adds
+           content insets the size of the safe area. So the view was edge to edge
+           while its CONTENT was pushed down from the top and up from the bottom,
+           leaving strips of background exactly as if nothing had been fixed at all.
+           Reported again 2026-09-16, after the .ignoresSafeArea() fix shipped.
+
+           .never hands the whole surface to the page, which is what the web app
+           already expects: it keeps its own bars and popups clear of the notch and
+           home indicator with CSS env(safe-area-inset-*), and viewport-fit=cover is
+           set precisely so those resolve to real values instead of zero. Two systems
+           both reserving room for the same safe area is what produced the bands. */
+        webView.scrollView.contentInsetAdjustmentBehavior = .never
+
         let refresh = UIRefreshControl()
         refresh.addTarget(self, action: #selector(pullToRefresh), for: .valueChanged)
         webView.scrollView.refreshControl = refresh
