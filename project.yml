@@ -59,11 +59,13 @@ targets:
         # version '1.0' is closed for new build submissions"), no matter what the
         # build number is. So this has to move for any new release, not just the
         # build number below.
-        MARKETING_VERSION: "1.0.1"
+        # Bumped from "1.0.1" 2026-09-23 — that version reached "Ready for Distribution"
+        # (approved), closing its train the same way 1.0 did. See the comment above.
+        MARKETING_VERSION: "1.0.2"
         # Apple rejects re-uploading the same (version, build) pair. Bump this every
         # time a new build is pushed to main; reset to "1" alongside a new
         # MARKETING_VERSION if you prefer, but never reuse a pair.
-        CURRENT_PROJECT_VERSION: "3"
+        CURRENT_PROJECT_VERSION: "4"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
