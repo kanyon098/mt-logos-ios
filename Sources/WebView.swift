@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import AVFoundation
 
 /* The whole app is one WKWebView pointed at mtlogos.com — see APP-STORE-CHECKLIST.md /
    the ship plan for why (subscriptions stay on the website, this is a free sign-in
@@ -9,7 +10,7 @@ import WebKit
    " MtLogosApp/1" suffix on the User-Agent below and strips all pricing/subscribe UI
    from /login and /pay accordingly — that's what keeps this compliant with Apple
    Guideline 3.1.1 / 3.1.3(e). Don't drop that suffix without updating the Worker too. */
-final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate {
+final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     @Published var loadFailed = false
 
     let webView: WKWebView
@@ -29,6 +30,26 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     override init() {
         webView = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
         super.init()
+
+        /* Breathe's Web Audio chimes have been reported silent on iOS three separate
+           times (see mtλapp.html's brzAudioCtx()/brzUnlockAudio() comments — the
+           gesture-unlock timing, the mid-session-suspend recovery, and the
+           standalone-mode touchstart-vs-click gesture type have all been fixed on the
+           JS side already, and it was STILL reported silent after each one). What
+           none of those could reach: a WKWebView never activates an AVAudioSession on
+           its own, and WITHOUT one iOS may route Web Audio output nowhere at all
+           inside a wrapped app, regardless of anything the page's own script does —
+           this is a plain gap on the native side, not something JS can fix.
+           .ambient is deliberate, not .playback: it activates real audio output while
+           still respecting the physical Silent switch (mixes with other audio, gets
+           interrupted by system sounds) — matching how a UI chime should behave, and
+           consistent with the "still can't do anything about the silent switch, and
+           shouldn't" reasoning already documented on the JS side. Failing silently on
+           purpose (try?) — a session that can't activate should never crash the app
+           over a sound effect. */
+        try? AVAudioSession.sharedInstance().setCategory(.ambient, options: [.mixWithOthers])
+        try? AVAudioSession.sharedInstance().setActive(true)
+
         webView.navigationDelegate = self
         webView.uiDelegate = self
         webView.allowsBackForwardNavigationGestures = true
@@ -48,6 +69,13 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
            set precisely so those resolve to real values instead of zero. Two systems
            both reserving room for the same safe area is what produced the bands. */
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+
+        // Bridge for hapticTap() in mtλapp.html (Home/Settings/Skopo taps) — see
+        // userContentController(_:didReceive:) below. Added to the SAME
+        // WKWebViewConfiguration instance the webView above already owns; a
+        // userContentController is a live, mutable object, so registering a handler
+        // on it after the webView exists still reaches every page it loads.
+        webView.configuration.userContentController.add(self, name: "haptic")
 
         let refresh = UIRefreshControl()
         refresh.addTarget(self, action: #selector(pullToRefresh), for: .valueChanged)
@@ -102,6 +130,18 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
         loadFailed = false
+    }
+
+    // MARK: - WKScriptMessageHandler: haptics
+
+    // hapticTap() in mtλapp.html posts here on tapping Home, Settings, or Skopo — a
+    // light tap-buzz. navigator.vibrate() (the JS side's other attempt) does nothing
+    // on iOS; WebKit has never implemented the Vibration API there, on-device or in
+    // this wrapper, so this bridge is the only way to actually feel it on iPhone.
+    func userContentController(_ userContentController: WKUserContentController,
+                                didReceive message: WKScriptMessage) {
+        guard message.name == "haptic" else { return }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     // MARK: - WKUIDelegate: JS alert/confirm/prompt

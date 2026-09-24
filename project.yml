@@ -65,7 +65,7 @@ targets:
         # Apple rejects re-uploading the same (version, build) pair. Bump this every
         # time a new build is pushed to main; reset to "1" alongside a new
         # MARKETING_VERSION if you prefer, but never reuse a pair.
-        CURRENT_PROJECT_VERSION: "4"
+        CURRENT_PROJECT_VERSION: "5"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
