@@ -1,6 +1,7 @@
 import SwiftUI
 import WebKit
 import AVFoundation
+import UserNotifications
 
 /* The whole app is one WKWebView pointed at mtlogos.com — see APP-STORE-CHECKLIST.md /
    the ship plan for why (subscriptions stay on the website, this is a free sign-in
@@ -76,6 +77,11 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         // userContentController is a live, mutable object, so registering a handler
         // on it after the webView exists still reaches every page it loads.
         webView.configuration.userContentController.add(self, name: "haptic")
+        // Bridge for requestApnsToken() in mtλapp.html (the Notifications toggle,
+        // when running inside this wrapped build) — see userContentController(_:
+        // didReceive:) below and Push.swift's AppDelegate, which is where the
+        // actual token (or failure) gets handed back to the page.
+        webView.configuration.userContentController.add(self, name: "apnsRegister")
 
         let refresh = UIRefreshControl()
         refresh.addTarget(self, action: #selector(pullToRefresh), for: .valueChanged)
@@ -140,8 +146,26 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
     // this wrapper, so this bridge is the only way to actually feel it on iPhone.
     func userContentController(_ userContentController: WKUserContentController,
                                 didReceive message: WKScriptMessage) {
-        guard message.name == "haptic" else { return }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        if message.name == "haptic" {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            return
+        }
+        if message.name == "apnsRegister" {
+            // Must happen on the main thread, and the actual system permission
+            // prompt only appears once per install — a second tap after already
+            // granting (or denying) just re-registers silently, matching how the
+            // browser side's Notification.requestPermission() behaves too.
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, _ in
+                DispatchQueue.main.async {
+                    if granted {
+                        UIApplication.shared.registerForRemoteNotifications()
+                    } else {
+                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__apnsTokenFailed && window.__apnsTokenFailed()")
+                    }
+                }
+            }
+            return
+        }
     }
 
     // MARK: - WKUIDelegate: JS alert/confirm/prompt
@@ -231,6 +255,11 @@ struct ContentView: View {
             }
         }
         .onAppear {
+            // AppDelegate needs this to hand a device token (or a failure) back
+            // to the page once didRegisterForRemoteNotificationsWithDeviceToken
+            // fires — see Push.swift. Cheap to set on every appear; it's just a
+            // weak reference, never re-creates anything.
+            AppDelegate.shared?.webView = store.webView
             if store.webView.url == nil { store.load() }
         }
     }

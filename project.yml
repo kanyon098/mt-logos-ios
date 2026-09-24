@@ -48,6 +48,22 @@ targets:
         # in-page feature triggers it.
         NSCameraUsageDescription: "Mt. Logos uses your camera to scan QR codes and take meal or gym photos within the app."
         CFBundleIconName: AppIcon
+    # Push Notifications capability — added 2026-09-24 for real APNs push (see
+    # Push.swift / WebView.swift's "apnsRegister" handler / the APNs module in
+    # worker/src/index.js). XcodeGen generates this entitlements file inline,
+    # same "no checked-in file needed" pattern the Info.plist above already
+    # uses. `-allowProvisioningUpdates` on the archive step (already relied on
+    # for the named "Mt Logos App Store" profile) should also enable the Push
+    # Notifications capability on the com.mtlogos.app App ID and regenerate
+    # that profile to match automatically, given the App Store Connect API key
+    # already in use here — but this is the FIRST entitlement this project has
+    # ever declared, so if a build fails on a provisioning/capability error
+    # after this lands, enabling Push Notifications by hand once in Apple
+    # Developer -> Identifiers -> com.mtlogos.app is the fallback.
+    entitlements:
+      path: Generated/MtLogos.entitlements
+      properties:
+        aps-environment: production
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mtlogos.app
@@ -65,7 +81,7 @@ targets:
         # Apple rejects re-uploading the same (version, build) pair. Bump this every
         # time a new build is pushed to main; reset to "1" alongside a new
         # MARKETING_VERSION if you prefer, but never reuse a pair.
-        CURRENT_PROJECT_VERSION: "5"
+        CURRENT_PROJECT_VERSION: "6"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
