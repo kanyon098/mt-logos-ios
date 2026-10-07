@@ -41,14 +41,16 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
            its own, and WITHOUT one iOS may route Web Audio output nowhere at all
            inside a wrapped app, regardless of anything the page's own script does —
            this is a plain gap on the native side, not something JS can fix.
-           .ambient is deliberate, not .playback: it activates real audio output while
-           still respecting the physical Silent switch (mixes with other audio, gets
-           interrupted by system sounds) — matching how a UI chime should behave, and
-           consistent with the "still can't do anything about the silent switch, and
-           shouldn't" reasoning already documented on the JS side. Failing silently on
-           purpose (try?) — a session that can't activate should never crash the app
-           over a sound effect. */
-        try? AVAudioSession.sharedInstance().setCategory(.ambient, options: [.mixWithOthers])
+           .playback, changed from .ambient 2026-10-07 after a fourth "still silent"
+           report: .ambient is muted by the Ring/Silent switch, which is where most
+           phones live, so the chimes were silenced by design. A breathing guide is
+           followed eyes-closed and has to be heard, same reason meditation apps use
+           .playback. .mixWithOthers keeps it from stopping someone's music or
+           podcast. The page also asks for the same category itself
+           (navigator.audioSession in brzAudioCtx()), so this and the JS agree.
+           Failing silently on purpose (try?) — a session that can't activate should
+           never crash the app over a sound effect. */
+        try? AVAudioSession.sharedInstance().setCategory(.playback, options: [.mixWithOthers])
         try? AVAudioSession.sharedInstance().setActive(true)
 
         webView.navigationDelegate = self
