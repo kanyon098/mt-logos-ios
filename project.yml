@@ -86,11 +86,13 @@ targets:
         # approved one (see the comment above this block), which 4.0.2 clears easily
         # and leaves plenty of real headroom (4.1, 4.2, 5.0...) for years of
         # legitimate future releases without ever forcing an awkward number.
-        MARKETING_VERSION: "4.0.2"
+        # 4.0.3 (10), 2026-10-08: fresh release so the listing shows a recent update
+        # (Kanyon). No native changes; today's work was all on mtlogos.com.
+        MARKETING_VERSION: "4.0.3"
         # Apple rejects re-uploading the same (version, build) pair. Bump this every
         # time a new build is pushed to main; reset to "1" alongside a new
         # MARKETING_VERSION if you prefer, but never reuse a pair.
-        CURRENT_PROJECT_VERSION: "9"
+        CURRENT_PROJECT_VERSION: "10"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
