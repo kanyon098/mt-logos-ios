@@ -71,12 +71,20 @@ jobs:
           mkdir -p ~/private_keys
           echo "$APPSTORE_API_PRIVATE_KEY" > ~/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8
 
+      # 2026-10-08: on a failure, echo the REAL xcodebuild error(s) as ::error::
+      # workflow commands. Claude (building this headless, no Mac, no interactive
+      # gh auth with log-download rights on this repo) could only ever see "Process
+      # completed with exit code 65" from the normal Checks API — genuinely useless
+      # for diagnosing anything. ::error:: lines land in the same check-run
+      # annotations list that generic failure already showed up in, which IS
+      # readable without extra permissions — so this is what makes a failed build
+      # actually self-diagnosable from outside a browser.
       - name: Archive
         env:
           APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           xcodebuild archive \
             -project MtLogos.xcodeproj \
             -scheme MtLogos \
@@ -86,14 +94,26 @@ jobs:
             -allowProvisioningUpdates \
             -authenticationKeyPath "$HOME/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8" \
             -authenticationKeyID "$APPSTORE_API_KEY_ID" \
-            -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID"
+            -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID" \
+            2>&1 | tee "$RUNNER_TEMP/archive.log"
+          STATUS=${PIPESTATUS[0]}
+          if [ "$STATUS" -ne 0 ]; then
+            echo "::group::Full archive log"
+            cat "$RUNNER_TEMP/archive.log"
+            echo "::endgroup::"
+            grep -E "error:|Code Signing Error|requires a provisioning profile|doesn.t match|No profiles|fail(ed|ure)" -i "$RUNNER_TEMP/archive.log" \
+              | sort -u | while IFS= read -r line; do
+                echo "::error::$line"
+              done
+            exit "$STATUS"
+          fi
 
       - name: Export .ipa
         env:
           APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -117,7 +137,19 @@ jobs:
             -allowProvisioningUpdates \
             -authenticationKeyPath "$HOME/private_keys/AuthKey_${APPSTORE_API_KEY_ID}.p8" \
             -authenticationKeyID "$APPSTORE_API_KEY_ID" \
-            -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID"
+            -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID" \
+            2>&1 | tee "$RUNNER_TEMP/export.log"
+          STATUS=${PIPESTATUS[0]}
+          if [ "$STATUS" -ne 0 ]; then
+            echo "::group::Full export log"
+            cat "$RUNNER_TEMP/export.log"
+            echo "::endgroup::"
+            grep -E "error:|Code Signing Error|requires a provisioning profile|doesn.t match|No profiles|fail(ed|ure)" -i "$RUNNER_TEMP/export.log" \
+              | sort -u | while IFS= read -r line; do
+                echo "::error::$line"
+              done
+            exit "$STATUS"
+          fi
 
       - name: Upload to TestFlight
         env:
