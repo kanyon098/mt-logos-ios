@@ -64,6 +64,17 @@ targets:
       path: Generated/MtLogos.entitlements
       properties:
         aps-environment: production
+        # Content blocking (2026-10-08) — DnsFilter.swift/NEDNSSettingsManager. Needs
+        # this entitlement with "dns-settings" in the capability list (confirmed via
+        # Apple's own NetworkExtension docs), but — unlike Family Controls above —
+        # needs NO separate manual Apple approval; it's available to any paid developer
+        # account the moment it's declared. -allowProvisioningUpdates on the archive
+        # step should enable the matching App ID capability automatically, same as
+        # Push Notifications did; enabling Network Extensions by hand once in Apple
+        # Developer -> Identifiers -> com.mtlogos.app is the fallback if a build fails
+        # on a provisioning/capability error after this lands.
+        com.apple.developer.networking.networkextension:
+          - dns-settings
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mtlogos.app
@@ -88,11 +99,14 @@ targets:
         # legitimate future releases without ever forcing an awkward number.
         # 4.0.3 (10), 2026-10-08: fresh release so the listing shows a recent update
         # (Kanyon). No native changes; today's work was all on mtlogos.com.
-        MARKETING_VERSION: "4.0.3"
+        # 4.1.0 (11), 2026-10-08: first REAL native change since Push Notifications —
+        # content blocking (DnsFilter.swift/NEDNSSettingsManager). Minor version bump,
+        # not cosmetic, since this is an actual new capability, not a re-upload.
+        MARKETING_VERSION: "4.1.0"
         # Apple rejects re-uploading the same (version, build) pair. Bump this every
         # time a new build is pushed to main; reset to "1" alongside a new
         # MARKETING_VERSION if you prefer, but never reuse a pair.
-        CURRENT_PROJECT_VERSION: "10"
+        CURRENT_PROJECT_VERSION: "11"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC

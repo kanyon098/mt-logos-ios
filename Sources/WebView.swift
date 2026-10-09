@@ -11,6 +11,16 @@ import UserNotifications
    " MtLogosApp/1" suffix on the User-Agent below and strips all pricing/subscribe UI
    from /login and /pay accordingly — that's what keeps this compliant with Apple
    Guideline 3.1.1 / 3.1.3(e). Don't drop that suffix without updating the Worker too. */
+/// Safely embeds a Swift String as a single-quoted JS string literal inside an
+/// evaluateJavaScript() call — used wherever a native error message (never trusted,
+/// arbitrary text from the OS) gets handed to the page.
+private func jsStringLiteral(_ s: String) -> String {
+    let escaped = s.replacingOccurrences(of: "\\", with: "\\\\")
+        .replacingOccurrences(of: "'", with: "\\'")
+        .replacingOccurrences(of: "\n", with: "\\n")
+    return "'\(escaped)'"
+}
+
 final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler {
     @Published var loadFailed = false
 
@@ -84,6 +94,9 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         // didReceive:) below and Push.swift's AppDelegate, which is where the
         // actual token (or failure) gets handed back to the page.
         webView.configuration.userContentController.add(self, name: "apnsRegister")
+        // Bridge for the content-blocking toggle in mtλapp.html (Accountability tab) —
+        // see "dnsFilter" in userContentController(_:didReceive:) below and DnsFilter.swift.
+        webView.configuration.userContentController.add(self, name: "dnsFilter")
 
         let refresh = UIRefreshControl()
         refresh.addTarget(self, action: #selector(pullToRefresh), for: .valueChanged)
@@ -164,6 +177,28 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                     } else {
                         AppDelegate.shared?.webView?.evaluateJavaScript("window.__apnsTokenFailed && window.__apnsTokenFailed()")
                     }
+                }
+            }
+            return
+        }
+        if message.name == "dnsFilter" {
+            // body is one of "enable" | "disable" | "status" — see dnsFilterEnable()/
+            // dnsFilterStatus() in mtλapp.html, which is what's waiting on the
+            // matching window.__dnsFilter* callback this posts back.
+            let command = (message.body as? String) ?? "status"
+            switch command {
+            case "enable":
+                DnsFilter.enable { ok, errorMessage in
+                    let arg = ok ? "true" : "false, " + jsStringLiteral(errorMessage ?? "Could not turn it on.")
+                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__dnsFilterResult && window.__dnsFilterResult(\(arg))")
+                }
+            case "disable":
+                DnsFilter.disable { ok in
+                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__dnsFilterResult && window.__dnsFilterResult(\(ok ? "true" : "false"))")
+                }
+            default:
+                DnsFilter.isEnabled { on in
+                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__dnsFilterStatus && window.__dnsFilterStatus(\(on ? "true" : "false"))")
                 }
             }
             return
