@@ -84,7 +84,14 @@ jobs:
           APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
         run: |
+          # GitHub Actions invokes every `run:` step as `bash -e ...` itself, UNDER
+          # whatever `set` this script does — so just never writing "set -e" here
+          # (what the first attempt at this did) does NOT turn it off; the inherited
+          # -e was still live and killed the script the instant xcodebuild failed,
+          # before a single line of the diagnostic block below ever ran. `set +e`
+          # is the one that actually matters.
           set -uo pipefail
+          set +e
           xcodebuild archive \
             -project MtLogos.xcodeproj \
             -scheme MtLogos \
@@ -114,6 +121,7 @@ jobs:
           APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
         run: |
           set -uo pipefail
+          set +e
           cat > "$RUNNER_TEMP/ExportOptions.plist" <<'EOF'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
