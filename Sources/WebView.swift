@@ -214,8 +214,13 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             return
         }
         if message.name == "appBlocking" {
-            // body is one of "pickApps" | "clear" | "status" — see appBlockingCall() in
-            // mtλapp.html, waiting on window.__appBlockingResult.
+            // body is one of "pickApps" | "editRules" | "clear" | "status" — see
+            // appBlockingCall() in mtλapp.html, waiting on window.__appBlockingResult.
+            // pickApps and editRules are both gated behind the SAME accountability-
+            // partner approval the web page already checks before ever posting either
+            // command here (renderAppBlockingSettings()) — not re-checked natively,
+            // same honesty-not-lock-out model as DnsFilter.disable() and the DNS toggle
+            // itself: the gate lives in the UI the person sees, not a tamper-proof wall.
             let command = (message.body as? String) ?? "status"
             switch command {
             case "pickApps":
@@ -226,6 +231,14 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                 AppBlocking.shared.presentPicker(from: vc) { ok, count, errorMessage in
                     let errArg = errorMessage == nil ? "null" : jsStringLiteral(errorMessage!)
                     AppDelegate.shared?.webView?.evaluateJavaScript("window.__appBlockingResult && window.__appBlockingResult(\(ok ? "true" : "false"), \(count), \(errArg))")
+                }
+            case "editRules":
+                guard let vc = topViewController() else {
+                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__appBlockingResult && window.__appBlockingResult(false, 0, \(jsStringLiteral("Could not show the rule editor.")))")
+                    return
+                }
+                AppBlocking.shared.presentRuleEditor(from: vc) { ok in
+                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__appBlockingResult && window.__appBlockingResult(\(ok ? "true" : "false"), 0, null)")
                 }
             case "clear":
                 AppBlocking.shared.clear { ok in
