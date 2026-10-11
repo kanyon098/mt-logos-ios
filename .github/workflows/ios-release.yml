@@ -134,6 +134,8 @@ jobs:
             <dict>
               <key>com.mtlogos.app</key>
               <string>Mt Logos App Store</string>
+              <key>com.mtlogos.app.monitor</key>
+              <string>Mt Logos Monitor Extension</string>
             </dict>
           </dict>
           </plist>

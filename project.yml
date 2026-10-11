@@ -126,11 +126,19 @@ targets:
         # 4.1.0 (11), 2026-10-08: first REAL native change since Push Notifications —
         # content blocking (DnsFilter.swift/NEDNSSettingsManager). Minor version bump,
         # not cosmetic, since this is an actual new capability, not a re-upload.
-        MARKETING_VERSION: "4.1.0"
+        # 4.2.0 (12), 2026-10-11: second real batch of native changes — app blocking
+        # (AppBlocking.swift/FamilyActivityPicker), conditional per-app rules
+        # (MonitorExtension, a second target — see its own comment above), DNS
+        # disable error-message fix. This number had sat at 4.1.0 (11) since 10-08
+        # with none of today's changes reflected in it, which was ALSO why every
+        # CI build today failed at Upload to TestFlight even before the provisioning
+        # errors: Apple rejects re-uploading an already-used (version, build) pair,
+        # and (4.1.0, 11) was already live from 10-08.
+        MARKETING_VERSION: "4.2.0"
         # Apple rejects re-uploading the same (version, build) pair. Bump this every
         # time a new build is pushed to main; reset to "1" alongside a new
         # MARKETING_VERSION if you prefer, but never reuse a pair.
-        CURRENT_PROJECT_VERSION: "11"
+        CURRENT_PROJECT_VERSION: "12"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
@@ -194,8 +202,10 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mtlogos.app.monitor
         PRODUCT_NAME: "MtLogos Monitor"
-        MARKETING_VERSION: "4.1.0"
-        CURRENT_PROJECT_VERSION: "11"
+        # Must match the main MtLogos target's version exactly — Apple validates an
+        # embedded extension's version against its host app at upload time.
+        MARKETING_VERSION: "4.2.0"
+        CURRENT_PROJECT_VERSION: "12"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9
