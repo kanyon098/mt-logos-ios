@@ -90,6 +90,10 @@ targets:
         # Family Controls by hand once in Apple Developer -> Identifiers -> com.mtlogos.app
         # is the fallback if a build fails on a provisioning/capability error after this.
         com.apple.developer.family-controls: true
+        # Portal setup completed 2026-10-11: App Group registered, Family Controls
+        # (Development/Distribution/App and Website Usage) + App Groups enabled on both
+        # this App ID and com.mtlogos.app.monitor, both linked to group.com.mtlogos.app,
+        # stale "Mt Logos App Store" profile deleted so a fresh one regenerates clean.
         # App Group (2026-10-11) — lets the main app and the new MonitorExtension below
         # (a separate mini-binary Apple's system runs on its own schedule, not something
         # this app's own process controls) read/write the SAME stored app-blocking rules
