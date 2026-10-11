@@ -97,6 +97,15 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         // Bridge for the content-blocking toggle in mtλapp.html (Accountability tab) —
         // see "dnsFilter" in userContentController(_:didReceive:) below and DnsFilter.swift.
         webView.configuration.userContentController.add(self, name: "dnsFilter")
+        // Bridge for app-level blocking (App Store, future conditional app blocking) in
+        // mtλapp.html — see "appBlocking" below and AppBlocking.swift. Separate feature
+        // from dnsFilter above on purpose; see AppBlocking.swift's own long comment.
+        webView.configuration.userContentController.add(self, name: "appBlocking")
+        // A shield picked in an earlier session should still be in force on this one —
+        // DnsFilter has no equivalent because NEDNSSettingsManager's setting already
+        // persists itself at the OS level; ManagedSettingsStore does too, but applying it
+        // again here is cheap and removes any doubt about it surviving a relaunch.
+        AppBlocking.shared.reapplySavedShield()
 
         let refresh = UIRefreshControl()
         refresh.addTarget(self, action: #selector(pullToRefresh), for: .valueChanged)
@@ -201,6 +210,30 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                 DnsFilter.isEnabled { on in
                     AppDelegate.shared?.webView?.evaluateJavaScript("window.__dnsFilterStatus && window.__dnsFilterStatus(\(on ? "true" : "false"))")
                 }
+            }
+            return
+        }
+        if message.name == "appBlocking" {
+            // body is one of "pickApps" | "clear" | "status" — see appBlockingCall() in
+            // mtλapp.html, waiting on window.__appBlockingResult.
+            let command = (message.body as? String) ?? "status"
+            switch command {
+            case "pickApps":
+                guard let vc = topViewController() else {
+                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__appBlockingResult && window.__appBlockingResult(false, 0, \(jsStringLiteral("Could not show the picker.")))")
+                    return
+                }
+                AppBlocking.shared.presentPicker(from: vc) { ok, count, errorMessage in
+                    let errArg = errorMessage == nil ? "null" : jsStringLiteral(errorMessage!)
+                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__appBlockingResult && window.__appBlockingResult(\(ok ? "true" : "false"), \(count), \(errArg))")
+                }
+            case "clear":
+                AppBlocking.shared.clear { ok in
+                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__appBlockingResult && window.__appBlockingResult(\(ok ? "true" : "false"), 0, null)")
+                }
+            default:
+                let (isActive, count) = AppBlocking.shared.status()
+                AppDelegate.shared?.webView?.evaluateJavaScript("window.__appBlockingStatus && window.__appBlockingStatus(\(isActive ? "true" : "false"), \(count))")
             }
             return
         }

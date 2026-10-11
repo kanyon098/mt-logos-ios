@@ -75,6 +75,21 @@ targets:
         # on a provisioning/capability error after this lands.
         com.apple.developer.networking.networkextension:
           - dns-settings
+        # App-level blocking (2026-10-11) — AppBlocking.swift/FamilyActivityPicker +
+        # ManagedSettingsStore. Separate from and unrelated to the DNS content-blocking
+        # above: DNS stays the mechanism for adult-content website blocking (list never
+        # leaves the server, nobody has to look at it to turn it on/off). This is only
+        # for blocking specific APPS (App Store, and later any app the user picks) —
+        # Apple requires a human to select apps from its own on-screen picker for this,
+        # which is fine here since app names aren't sensitive the way a website list is.
+        # Family Controls needed Apple's manual entitlement approval (granted 2026-10-08,
+        # confirmed in Apple Developer -> Certificates/Identifiers -> com.mtlogos.app)
+        # before it could ever be declared here — this is the first build to actually use
+        # it. -allowProvisioningUpdates on the archive step should pick up the matching
+        # App ID capability automatically, same as Push Notifications/DNS did; enabling
+        # Family Controls by hand once in Apple Developer -> Identifiers -> com.mtlogos.app
+        # is the fallback if a build fails on a provisioning/capability error after this.
+        com.apple.developer.family-controls: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mtlogos.app
