@@ -193,8 +193,9 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                     AppDelegate.shared?.webView?.evaluateJavaScript("window.__dnsFilterResult && window.__dnsFilterResult(\(arg))")
                 }
             case "disable":
-                DnsFilter.disable { ok in
-                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__dnsFilterResult && window.__dnsFilterResult(\(ok ? "true" : "false"))")
+                DnsFilter.disable { ok, errorMessage in
+                    let arg = ok ? "true" : "false, " + jsStringLiteral(errorMessage ?? "Could not turn it off.")
+                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__dnsFilterResult && window.__dnsFilterResult(\(arg))")
                 }
             default:
                 DnsFilter.isEnabled { on in

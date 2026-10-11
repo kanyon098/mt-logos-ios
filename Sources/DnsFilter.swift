@@ -45,9 +45,18 @@ final class DnsFilter {
     /// the partner-approval flow around editing settings (see block_edit_* in
     /// worker/src/index.js), not technically preventing removal — same honest limit
     /// every phone-based blocker has, acknowledged directly to Kanyon already.
-    static func disable(completion: @escaping (Bool) -> Void) {
+    /// Threads the real system error back (2026-10-11 fix) — this used to collapse any
+    /// failure to a bare false, which is why the page could only ever show a generic
+    /// "Something went wrong." with no way to tell what actually happened on the device.
+    static func disable(completion: @escaping (Bool, String?) -> Void) {
         NEDNSSettingsManager.shared().removeFromPreferences { error in
-            DispatchQueue.main.async { completion(error == nil) }
+            DispatchQueue.main.async {
+                if let error = error {
+                    completion(false, error.localizedDescription)
+                } else {
+                    completion(true, nil)
+                }
+            }
         }
     }
 }
