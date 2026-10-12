@@ -1,4 +1,5 @@
 import FamilyControls
+import ManagedSettings
 import SwiftUI
 
 /* Per-app conditional blocking rules — the UI half of AppBlockingRules.swift. Native,

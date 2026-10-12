@@ -1,5 +1,11 @@
 import FamilyControls
 import Foundation
+// ApplicationToken (used throughout this file as a dictionary key) is actually defined
+// in ManagedSettings, not FamilyControls — FamilyControls only re-exports it indirectly
+// through FamilyActivitySelection's own properties. Missing this import is exactly what
+// broke the 2026-10-11 CI build (confirmed via the real compiler error: "cannot find
+// type 'ApplicationToken' in scope"), caught only once a real build actually ran.
+import ManagedSettings
 
 /* Conditional app-blocking rules (2026-10-11) — Kanyon's exact spec, in his own words:
    default is fully blocked; from there, progressively deeper OPT-IN tiers, always in
