@@ -155,11 +155,50 @@ struct ClockIntegrityGuard {
               let lastUptime = defaults?.double(forKey: uptimeKey) else { return false }
         let wallDelta = now - lastWall
         let uptimeDelta = uptime - lastUptime
-        guard uptimeDelta >= 0 else { return false }   // uptime went backward = a real reboot, not tampering
+        guard uptimeDelta >= 0 else {
+            /* 2026-10-12, real gap found in a security audit: a reboot used to be
+               treated as "nothing to check" — the easiest real evasion of this whole
+               guard is change the clock, then reboot, which lands here every time and
+               walks away clean, with the new (tampered) time becoming the trusted
+               baseline for every future check with no record it ever happened. A
+               local reboot can forge the monotonic-uptime signal this guard otherwise
+               relies on, but it can't forge what time the real server thinks it is.
+               Fires a best-effort, fire-and-forget cross-check against the server's
+               own clock (the Date header any HTTPS response already carries — no new
+               server route needed) specifically for this case. Async, so it can't
+               change this function's synchronous return value for this call; it sets
+               the same tamperedKey flag retroactively if the server disagrees. */
+            verifyAgainstServerTime()
+            return false
+        }
         let drift = abs(wallDelta - uptimeDelta)
         let tampered = drift > 300   // 5-minute tolerance for normal NTP/timezone edge cases
         if tampered { defaults?.set(true, forKey: tamperedKey) }
         return tampered
+    }
+
+    /// Best-effort async cross-check against the server's own clock — not something a
+    /// local reboot can forge, unlike ProcessInfo.systemUptime. See checkAndRecord()'s
+    /// reboot branch above for why this exists. Silently does nothing if the network
+    /// is unreachable; that's the same honest limit as the rest of this guard (a
+    /// deliberately offline device is already outside what any client-side check
+    /// alone can ever catch).
+    private static func verifyAgainstServerTime() {
+        guard let url = URL(string: "https://mtlogos.com/manifest.webmanifest") else { return }
+        var request = URLRequest(url: url)
+        request.httpMethod = "HEAD"
+        request.timeoutInterval = 8
+        URLSession.shared.dataTask(with: request) { _, response, _ in
+            guard let http = response as? HTTPURLResponse,
+                  let dateString = http.value(forHTTPHeaderField: "Date") else { return }
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "en_US_POSIX")
+            formatter.timeZone = TimeZone(identifier: "GMT")
+            formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+            guard let serverDate = formatter.date(from: dateString) else { return }
+            let drift = abs(Date().timeIntervalSince1970 - serverDate.timeIntervalSince1970)
+            if drift > 300 { defaults?.set(true, forKey: tamperedKey) }
+        }.resume()
     }
 
     /// Whether the most recent check (from either the main app or the extension) found
