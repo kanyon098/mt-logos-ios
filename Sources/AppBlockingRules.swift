@@ -116,6 +116,43 @@ final class AppBlockingRulesStore {
         defaults?.set(data, forKey: "mtlogos.lastUnshield." + tokenKey(token))
     }
 
+    /// 2026-10-12, real bug found in a security audit: MonitorExtension's tryUnshield()
+    /// only ever checked clock-tamper and cooldown before lifting a shield — it had no
+    /// idea whether THIS period's budget or session threshold had already fired. A rule
+    /// with two unlock windows in the same day (the data model explicitly allows this)
+    /// could exhaust its budget in the first window, get correctly re-shielded by
+    /// eventDidReachThreshold, and then have that shield silently undone the moment the
+    /// SECOND window's own intervalDidStart fired — budget/session enforcement bypassed
+    /// for the rest of the period just by having more than one window. Recording which
+    /// day/week period a threshold fired in (and checking it before ever lifting a
+    /// shield again) closes that: a later window in the SAME period can no longer undo
+    /// an already-earned shield, while a new day/week naturally clears it just by the
+    /// period key changing, with no explicit reset step needed.
+    func thresholdFiredPeriodKey(for token: ApplicationToken) -> String? {
+        defaults?.string(forKey: "mtlogos.thresholdFired." + tokenKey(token))
+    }
+
+    func setThresholdFiredPeriodKey(_ key: String, for token: ApplicationToken) {
+        defaults?.set(key, forKey: "mtlogos.thresholdFired." + tokenKey(token))
+    }
+
+    /// A stable string identifying "which day" or "which week" a moment in time falls
+    /// in, matching whichever BudgetPeriod a rule actually uses — the key changing is
+    /// what lets a threshold-fired record naturally expire at the real period boundary
+    /// with no separate cleanup/reset code needed.
+    static func periodKey(for period: BudgetPeriod, at date: Date = Date()) -> String {
+        var cal = Calendar(identifier: .gregorian)
+        cal.timeZone = TimeZone.current
+        switch period {
+        case .day:
+            let c = cal.dateComponents([.year, .month, .day], from: date)
+            return "d\(c.year ?? 0)-\(c.month ?? 0)-\(c.day ?? 0)"
+        case .week:
+            let c = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: date)
+            return "w\(c.yearForWeekOfYear ?? 0)-\(c.weekOfYear ?? 0)"
+        }
+    }
+
     private func tokenKey(_ token: ApplicationToken) -> String {
         guard let data = try? JSONEncoder().encode(token) else { return "unknown" }
         return data.base64EncodedString()
