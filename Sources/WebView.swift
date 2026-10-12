@@ -52,9 +52,30 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
            for file/URL playback, not a live stream — which is the "blacks out"
            part: no actual crash, just nothing the player knows how to draw.
            Setting this true keeps every video (including this one) genuinely
-           inline, exactly as its own HTML attributes already asked for. */
+           inline, exactly as its own HTML attributes already asked for.
+
+           2026-10-12, STILL happening after the above fix, reported live: "it
+           pulls up the camera window at first but then it expands the whole
+           screen to camera view... if you x out of that live camera view, it
+           will have read the code." allowsInlineMediaPlayback alone wasn't the
+           whole story — it governs WHETHER inline playback is allowed, but
+           WebKit separately gates WHETHER a given play() call is trusted enough
+           to use it, based on mediaTypesRequiringUserActionForPlayback (default
+           .all). The barcode scanner's play() happens inside an async
+           getUserMedia().then() callback (decodeFromConstraints in mtλapp.html),
+           not synchronously inside the tap that opened the scanner, so WebKit
+           didn't credit it as a real user gesture and fell back to presenting
+           the native fullscreen AVKit player for that specific play() call — a
+           SEPARATE native view sitting on top of the DOM, which is exactly why
+           closing the in-app modal (which does fire the instant a barcode
+           decodes, same as always) didn't dismiss anything: there was a second,
+           native-level fullscreen presentation still on screen needing its own
+           manual dismissal. Setting this to [] (no media type ever requires a
+           user-gesture-gated play) removes that trust gate entirely, so every
+           play() call - sync or async - is honored inline. */
         let config = WKWebViewConfiguration()
         config.allowsInlineMediaPlayback = true
+        config.mediaTypesRequiringUserActionForPlayback = []
         webView = WKWebView(frame: .zero, configuration: config)
         super.init()
 

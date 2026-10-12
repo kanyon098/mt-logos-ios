@@ -149,7 +149,7 @@ targets:
         # duplicate (version, build) pair afterward, so one or both of 46/47 may not
         # actually show up usable in TestFlight. This build (13) is the first clean,
         # unambiguous one since the App Store toggle/clock-tamper code landed.
-        CURRENT_PROJECT_VERSION: "19"
+        CURRENT_PROJECT_VERSION: "21"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
@@ -222,7 +222,7 @@ targets:
         # Must match the main MtLogos target's version exactly — Apple validates an
         # embedded extension's version against its host app at upload time.
         MARKETING_VERSION: "4.2.0"
-        CURRENT_PROJECT_VERSION: "19"
+        CURRENT_PROJECT_VERSION: "21"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9
