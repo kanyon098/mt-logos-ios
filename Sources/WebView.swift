@@ -39,7 +39,23 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         "(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1 MtLogosApp/1"
 
     override init() {
-        webView = WKWebView(frame: .zero, configuration: WKWebViewConfiguration())
+        /* 2026-10-12, real bug Kanyon reported live: "the bar code scanner is not
+           working. it did the whole screen as a camera and blacks out." Root cause:
+           a bare WKWebViewConfiguration() defaults allowsInlineMediaPlayback to
+           FALSE on iOS — meaning every <video> element, even one with the
+           playsinline/muted HTML attributes the barcode scanner's camera feed
+           already sets correctly (see mtλapp.html's #barcodeVideo), still gets
+           forced into the native AVKit fullscreen video player the instant it
+           starts playing. That's "did the whole screen as a camera." The native
+           fullscreen player then can't properly render a raw live getUserMedia
+           camera MediaStream the way it renders a normal video file — it's built
+           for file/URL playback, not a live stream — which is the "blacks out"
+           part: no actual crash, just nothing the player knows how to draw.
+           Setting this true keeps every video (including this one) genuinely
+           inline, exactly as its own HTML attributes already asked for. */
+        let config = WKWebViewConfiguration()
+        config.allowsInlineMediaPlayback = true
+        webView = WKWebView(frame: .zero, configuration: config)
         super.init()
 
         /* Breathe's Web Audio chimes have been reported silent on iOS three separate
