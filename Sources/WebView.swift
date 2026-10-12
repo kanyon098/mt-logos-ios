@@ -134,7 +134,12 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         // link with nowhere of its own to land — always send those out, even if the
         // host would otherwise be allowed, since there is no in-app tab to open it in.
         if navigationAction.targetFrame == nil || !isOnDomain {
-            if ["http", "https", "mailto", "tel"].contains(url.scheme ?? "") {
+            // "sms" added 2026-10-11 — acctTextCode() (Accountability tab's "Text it"
+            // button, mtλapp.html) navigates to sms:?&body=... to hand off a pairing
+            // code via Messages; missing from this list meant the navigation was just
+            // silently cancelled inside the WKWebView, the exact "button does nothing"
+            // report, with no error and nothing to see on screen.
+            if ["http", "https", "mailto", "tel", "sms"].contains(url.scheme ?? "") {
                 UIApplication.shared.open(url)
             }
             decisionHandler(.cancel)
