@@ -183,8 +183,8 @@ final class AppBlocking {
         // scheduling logic in this whole feature and needs real device verification
         // before trusting it resets exactly on the week boundary as intended.
         let span: DeviceActivitySchedule = rule.budgetPeriod == .week
-            ? DeviceActivitySchedule(intervalStart: DateComponents(weekday: 1, hour: 0, minute: 0),
-                                      intervalEnd: DateComponents(weekday: 7, hour: 23, minute: 59), repeats: true)
+            ? DeviceActivitySchedule(intervalStart: DateComponents(hour: 0, minute: 0, weekday: 1),
+                                      intervalEnd: DateComponents(hour: 23, minute: 59, weekday: 7), repeats: true)
             : DeviceActivitySchedule(intervalStart: DateComponents(hour: 0, minute: 0),
                                       intervalEnd: DateComponents(hour: 23, minute: 59), repeats: true)
         var events: [DeviceActivityEvent.Name: DeviceActivityEvent] = [
