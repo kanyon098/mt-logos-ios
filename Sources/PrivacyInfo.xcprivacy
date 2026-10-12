@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Apple's Privacy Manifest requirement (2026-10-11) — added alongside today's
+  AppBlocking.swift/AppBlockingRules.swift, the first files in this project to use
+  either of the two "required reason" API categories below. Missing this file doesn't
+  block a TestFlight upload (confirmed — both builds today uploaded fine without it),
+  but App Store review validation is stricter than TestFlight and can reject a
+  submission over an undeclared required-reason API, so this needs to exist before
+  the actual App Store submission, not just TestFlight.
+
+  NSPrivacyAccessedAPICategoryUserDefaults (CA92.1): this app's UserDefaults/App Group
+  UserDefaults usage (AppBlocking.swift, AppBlockingRules.swift) only ever reads and
+  writes this app's OWN stored preferences and rule data — never used to read another
+  app's data or for any cross-app tracking purpose, which is exactly what reason CA92.1
+  covers ("access info from the same app, app extension, or app group that the app is
+  a member of").
+
+  NSPrivacyAccessedAPICategorySystemBootTime (35F9.1): ClockIntegrityGuard
+  (AppBlockingRules.swift) reads ProcessInfo.processInfo.systemUptime purely to measure
+  elapsed time BETWEEN TWO EVENTS RECORDED BY THIS APP (comparing it against wall-clock
+  elapsed time to detect a manually-changed system clock) — never to determine the
+  device's actual boot time or combined with other data to do so, which is exactly what
+  reason 35F9.1 covers.
+-->
+<plist version="1.0">
+<dict>
+	<key>NSPrivacyTracking</key>
+	<false/>
+	<key>NSPrivacyTrackingDomains</key>
+	<array/>
+	<key>NSPrivacyCollectedDataTypes</key>
+	<array/>
+	<key>NSPrivacyAccessedAPITypes</key>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>CA92.1</string>
+			</array>
+		</dict>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategorySystemBootTime</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>35F9.1</string>
+			</array>
+		</dict>
+	</array>
+</dict>
+</plist>

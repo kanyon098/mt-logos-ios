@@ -142,7 +142,14 @@ targets:
         # Apple rejects re-uploading the same (version, build) pair. Bump this every
         # time a new build is pushed to main; reset to "1" alongside a new
         # MARKETING_VERSION if you prefer, but never reuse a pair.
-        CURRENT_PROJECT_VERSION: "12"
+        # 13, 2026-10-11: runs #46 and #47 both uploaded as build 12 — this number
+        # was never bumped between those two pushes, only Swift source changed. The
+        # "Upload to TestFlight" step succeeding in CI only means altool's transfer
+        # succeeded; Apple's own post-upload processing can still silently reject a
+        # duplicate (version, build) pair afterward, so one or both of 46/47 may not
+        # actually show up usable in TestFlight. This build (13) is the first clean,
+        # unambiguous one since the App Store toggle/clock-tamper code landed.
+        CURRENT_PROJECT_VERSION: "13"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
@@ -187,6 +194,12 @@ targets:
       - path: Sources/Extension
       # The rule model is shared, not duplicated — same file compiled into both targets.
       - path: Sources/AppBlockingRules.swift
+      # This extension is its OWN separate bundle, and uses the same UserDefaults/
+      # systemUptime APIs via the shared AppBlockingRules.swift above (ClockIntegrityGuard
+      # runs inside MonitorExtension.swift too) — Apple requires each bundle that
+      # accesses a required-reason API to carry its own privacy manifest, not just the
+      # main app's. Same file, included in both targets' sources on purpose.
+      - path: Sources/PrivacyInfo.xcprivacy
     info:
       path: Generated/MonitorExtension-Info.plist
       properties:
@@ -209,7 +222,7 @@ targets:
         # Must match the main MtLogos target's version exactly — Apple validates an
         # embedded extension's version against its host app at upload time.
         MARKETING_VERSION: "4.2.0"
-        CURRENT_PROJECT_VERSION: "12"
+        CURRENT_PROJECT_VERSION: "13"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9
