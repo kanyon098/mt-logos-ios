@@ -254,9 +254,15 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             // the picker-based commands above, see AppBlocking.swift's
             // setAppStoreBlocked()/isAppStoreBlocked() for why this doesn't need a picker.
             case "toggleAppStore":
-                let newState = !AppBlocking.shared.isAppStoreBlocked()
-                AppBlocking.shared.setAppStoreBlocked(newState)
-                AppDelegate.shared?.webView?.evaluateJavaScript("window.__appStoreBlockStatus && window.__appStoreBlockStatus(\(newState ? "true" : "false"))")
+                let wantsOn = !AppBlocking.shared.isAppStoreBlocked()
+                // 2026-10-12: setAppStoreBlocked is now async (requests Screen Time
+                // authorization first — see its own comment) and reports back whether it
+                // actually took effect, so the web UI can never show "blocked" when
+                // authorization was denied and nothing was really enforced.
+                AppBlocking.shared.setAppStoreBlocked(wantsOn) { ok in
+                    let reportedState = ok ? wantsOn : AppBlocking.shared.isAppStoreBlocked()
+                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__appStoreBlockStatus && window.__appStoreBlockStatus(\(reportedState ? "true" : "false"))")
+                }
             case "appStoreStatus":
                 AppDelegate.shared?.webView?.evaluateJavaScript("window.__appStoreBlockStatus && window.__appStoreBlockStatus(\(AppBlocking.shared.isAppStoreBlocked() ? "true" : "false"))")
             // Clock-tamper flag (2026-10-11) — see ClockIntegrityGuard. "clearTamper" is

@@ -14,9 +14,18 @@ import NetworkExtension
    first. The actual block list never leaves the server; this just points the phone
    at the resolver that checks it. */
 final class DnsFilter {
+    /// 2026-10-12, real bug found in a security audit: this used to report whether the
+    /// loadFromPreferences CALL ITSELF succeeded, not whether this app's DNS config is
+    /// actually the one active on the device. If someone goes to iOS Settings -> General
+    /// -> VPN & Device Management and turns off or deletes the Mt. Logos DNS config
+    /// directly (a path Apple always exposes and this app has no way to block — see
+    /// disable()'s own comment on that honest limit), the load call still succeeds fine
+    /// with error == nil, so this kept reporting "protected" while every adult-content
+    /// domain was resolving normally. NEDNSSettingsManager exposes a real isEnabled
+    /// property for exactly this distinction; now actually reads it.
     static func isEnabled(completion: @escaping (Bool) -> Void) {
         NEDNSSettingsManager.shared().loadFromPreferences { error in
-            completion(error == nil)
+            completion(error == nil && NEDNSSettingsManager.shared().isEnabled)
         }
     }
 

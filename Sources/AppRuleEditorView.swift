@@ -177,16 +177,47 @@ private struct TimeWindowRow: View {
     let onChange: () -> Void
 
     var body: some View {
-        HStack {
-            DatePicker("From", selection: Binding(
-                get: { Self.date(fromMinute: window.startMinute) },
-                set: { window.startMinute = Self.minute(from: $0); onChange() }
-            ), displayedComponents: .hourAndMinute).labelsHidden()
-            Text("to")
-            DatePicker("To", selection: Binding(
-                get: { Self.date(fromMinute: window.endMinute) },
-                set: { window.endMinute = Self.minute(from: $0); onChange() }
-            ), displayedComponents: .hourAndMinute).labelsHidden()
+        VStack(alignment: .leading, spacing: 2) {
+            HStack {
+                /// 2026-10-12, real self-lock bug found in a security audit:
+                /// AppBlockingRules.swift's own comment states the invariant
+                /// "endMinute must be > startMinute; overnight windows aren't
+                /// supported in v1," but nothing here ever enforced it — nothing
+                /// stopped someone from setting "To" earlier than "From" (a very
+                /// plausible real action for anyone trying an overnight window like
+                /// "unlock 10pm-6am," since nothing in the UI hints that isn't
+                /// supported). That malformed window reaches
+                /// AppBlocking.applyRule()'s `try? center.startMonitoring(...)`,
+                /// which silently fails or registers a degenerate interval — either
+                /// way the app stays shielded by default (the documented fallback)
+                /// with no schedule that ever actually lifts it, while the rule list
+                /// still shows "Scheduled" as if it worked. Fixed by clamping
+                /// instead of just documenting the invariant: setting either end of
+                /// the window now keeps End > Start automatically, same-day only,
+                /// so the invalid state this bug depended on can no longer be saved.
+                DatePicker("From", selection: Binding(
+                    get: { Self.date(fromMinute: window.startMinute) },
+                    set: { newDate in
+                        let newStart = Self.minute(from: newDate)
+                        window.startMinute = newStart
+                        if window.endMinute <= newStart { window.endMinute = min(newStart + 1, 23*60+59) }
+                        onChange()
+                    }
+                ), displayedComponents: .hourAndMinute).labelsHidden()
+                Text("to")
+                DatePicker("To", selection: Binding(
+                    get: { Self.date(fromMinute: window.endMinute) },
+                    set: { newDate in
+                        var newEnd = Self.minute(from: newDate)
+                        if newEnd <= window.startMinute { newEnd = min(window.startMinute + 1, 23*60+59) }
+                        window.endMinute = newEnd
+                        onChange()
+                    }
+                ), displayedComponents: .hourAndMinute).labelsHidden()
+            }
+            Text("Same day only — this can't cross midnight yet.")
+                .font(.caption2)
+                .foregroundColor(.secondary)
         }
     }
 

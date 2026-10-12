@@ -39,9 +39,31 @@ final class AppBlocking {
     /// hides the app and prevents launching it, same as it would for any blocked app).
     /// This is strictly simpler than the shield mechanism: no token, no picker, no rule
     /// tiers — just on or off.
-    func setAppStoreBlocked(_ on: Bool) {
-        UserDefaults.standard.set(on, forKey: appStoreBlockedKey)
-        store.application.blockedApplications = on ? [Application(bundleIdentifier: appStoreBundleID)] : []
+    /// 2026-10-12, real bug found in a security audit: this used to flip the UserDefaults
+    /// flag AND the ManagedSettingsStore assignment with no Family Controls authorization
+    /// check at all — ensureAuthorized() was only ever called from presentPicker() below.
+    /// Anyone who toggled this on WITHOUT ever having opened the app-picker flow first
+    /// (Screen Time authorization still .notDetermined) got a UI that said "blocked" and a
+    /// UserDefaults flag that said true, while the actual ManagedSettingsStore assignment
+    /// was a silent no-op — nothing enforced at all. Now requests authorization first, same
+    /// as the picker path, and only commits the on-state (and reports success) once that's
+    /// actually granted.
+    func setAppStoreBlocked(_ on: Bool, completion: @escaping (Bool) -> Void) {
+        guard on else {
+            UserDefaults.standard.set(false, forKey: appStoreBlockedKey)
+            store.application.blockedApplications = []
+            completion(true)
+            return
+        }
+        Task { @MainActor in
+            guard await ensureAuthorized() else {
+                completion(false)
+                return
+            }
+            UserDefaults.standard.set(true, forKey: appStoreBlockedKey)
+            store.application.blockedApplications = [Application(bundleIdentifier: appStoreBundleID)]
+            completion(true)
+        }
     }
 
     func isAppStoreBlocked() -> Bool {
