@@ -1,5 +1,6 @@
 import DeviceActivity
 import FamilyControls
+import Foundation
 import ManagedSettings
 
 /* The enforcement half of conditional app-blocking rules — see AppBlockingRules.swift's
