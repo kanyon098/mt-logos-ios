@@ -25,7 +25,17 @@ final class DnsFilter {
     /// property for exactly this distinction; now actually reads it.
     static func isEnabled(completion: @escaping (Bool) -> Void) {
         NEDNSSettingsManager.shared().loadFromPreferences { error in
-            completion(error == nil && NEDNSSettingsManager.shared().isEnabled)
+            // 2026-10-12, real bug found in a fresh audit pass: unlike enable()/disable()
+            // just below, this completion was never dispatched to the main thread.
+            // loadFromPreferences's callback queue isn't documented/guaranteed to be
+            // main, and the only caller (WebView.swift's dnsFilter bridge) feeds this
+            // straight into evaluateJavaScript(), which REQUIRES the main thread —
+            // calling it off-thread is undefined behavior (most often a silent no-op).
+            // renderBlockingSettings() calls this on nearly every Accountability-tab
+            // render, so the "protected" indicator could nondeterministically fail to
+            // update on a real, frequently-hit path, not just an edge case.
+            let on = error == nil && NEDNSSettingsManager.shared().isEnabled
+            DispatchQueue.main.async { completion(on) }
         }
     }
 

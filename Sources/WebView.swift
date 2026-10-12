@@ -284,11 +284,18 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             // Clock-tamper flag (2026-10-11) — see ClockIntegrityGuard. "clearTamper" is
             // how the person acknowledges they saw the note, same one-way ack pattern as
             // any other dismissible warning; it does NOT undo whatever triggered it.
+            // 2026-10-12: now reports through its OWN __appTamperStatus callback instead
+            // of sharing __appStoreBlockStatus with toggleAppStore/appStoreStatus above —
+            // see mtλapp.html's appTamperCall() for the real race this was causing
+            // (toggleAppStore can take an arbitrarily long, human-timescale time waiting
+            // on the system Screen Time permission dialog; a tamper call landing on the
+            // same shared resolve slot during that window could steal/corrupt both
+            // answers).
             case "tamperStatus":
-                AppDelegate.shared?.webView?.evaluateJavaScript("window.__appStoreBlockStatus && window.__appStoreBlockStatus(\(AppBlocking.shared.clockTamperDetected() ? "true" : "false"))")
+                AppDelegate.shared?.webView?.evaluateJavaScript("window.__appTamperStatus && window.__appTamperStatus(\(AppBlocking.shared.clockTamperDetected() ? "true" : "false"))")
             case "clearTamper":
                 AppBlocking.shared.clearClockTamperFlag()
-                AppDelegate.shared?.webView?.evaluateJavaScript("window.__appStoreBlockStatus && window.__appStoreBlockStatus(false)")
+                AppDelegate.shared?.webView?.evaluateJavaScript("window.__appTamperStatus && window.__appTamperStatus(false)")
             default:
                 let (isActive, count) = AppBlocking.shared.status()
                 AppDelegate.shared?.webView?.evaluateJavaScript("window.__appBlockingStatus && window.__appBlockingStatus(\(isActive ? "true" : "false"), \(count))")

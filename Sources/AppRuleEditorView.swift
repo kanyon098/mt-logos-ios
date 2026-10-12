@@ -79,7 +79,22 @@ struct AppRuleEditView: View {
                 Toggle("Unlock at specific times", isOn: $hasWindows.animation())
                     .onChange(of: hasWindows) { on in
                         if on, rule.unlockWindows.isEmpty { rule.unlockWindows = [TimeWindow(startMinute: 8*60, endMinute: 20*60)] }
-                        if !on { rule.unlockWindows = []; hasBudget = false }
+                        /* 2026-10-12, real bug found in a fresh audit pass: turning a
+                           tier off only ever reset the NEXT @State flag, never
+                           anything deeper — rule.normalize() (called via commit()
+                           below) correctly cascade-clears the underlying AppBlockRule
+                           struct all the way down, but these UI booleans gating which
+                           sections render didn't follow. Concretely: configure all 4
+                           tiers, turn "Unlock at specific times" off then back on —
+                           hasSessionLimit could still read true from before even
+                           though rule.sessionLimitMinutes is now really nil, so the
+                           toggle renders already "on" with a stale minutes value and
+                           SwiftUI's onChange never fires to fix it (the boolean never
+                           actually changed). The person believes a safeguard is
+                           configured when it silently isn't — the exact failure mode
+                           this whole feature exists to prevent. Now resets every
+                           deeper flag, not just the adjacent one. */
+                        if !on { rule.unlockWindows = []; hasBudget = false; hasCooldown = false; hasSessionLimit = false }
                         commit()
                     }
             }
@@ -91,7 +106,8 @@ struct AppRuleEditView: View {
                     }
                     .onDelete { idx in
                         rule.unlockWindows.remove(atOffsets: idx)
-                        if rule.unlockWindows.isEmpty { hasWindows = false; hasBudget = false }
+                        // Same cascade-reset fix as the toggle above.
+                        if rule.unlockWindows.isEmpty { hasWindows = false; hasBudget = false; hasCooldown = false; hasSessionLimit = false }
                         commit()
                     }
                     Button("+ Add another window") {
@@ -104,7 +120,8 @@ struct AppRuleEditView: View {
                     Toggle("Limit total time", isOn: $hasBudget.animation())
                         .onChange(of: hasBudget) { on in
                             if on, rule.budgetMinutes == nil { rule.budgetMinutes = 60 }
-                            if !on { rule.budgetMinutes = nil; hasCooldown = false }
+                            // Same cascade-reset fix as hasWindows above.
+                            if !on { rule.budgetMinutes = nil; hasCooldown = false; hasSessionLimit = false }
                             commit()
                         }
                 }
