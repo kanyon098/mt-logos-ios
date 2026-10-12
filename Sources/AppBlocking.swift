@@ -26,6 +26,36 @@ final class AppBlocking {
     private let store = ManagedSettingsStore()
     private let center = DeviceActivityCenter()
     private let defaultsKey = "mtlogos.appBlockingSelection"
+    private let appStoreBlockedKey = "mtlogos.appStoreBlocked"
+    private let appStoreBundleID = "com.apple.AppStore"
+
+    /// One-tap App Store block (2026-10-11, Kanyon: "a toggle that blocks the app store").
+    /// Deliberately a SEPARATE mechanism from the picker-based shield.applications above —
+    /// Application(bundleIdentifier:) + store.application.blockedApplications is a real,
+    /// distinct ManagedSettings API that works from a KNOWN bundle id with no picker
+    /// involved at all (confirmed via Apple's own developer forum documentation before
+    /// building this, after initially and WRONGLY telling Kanyon this wasn't possible —
+    /// it blocks via the App Store's own well-known system bundle id, com.apple.AppStore,
+    /// hides the app and prevents launching it, same as it would for any blocked app).
+    /// This is strictly simpler than the shield mechanism: no token, no picker, no rule
+    /// tiers — just on or off.
+    func setAppStoreBlocked(_ on: Bool) {
+        UserDefaults.standard.set(on, forKey: appStoreBlockedKey)
+        store.application.blockedApplications = on ? [Application(bundleIdentifier: appStoreBundleID)] : []
+    }
+
+    func isAppStoreBlocked() -> Bool {
+        UserDefaults.standard.bool(forKey: appStoreBlockedKey)
+    }
+
+    /// Re-applies on every launch, same reasoning as reapplySavedShield() below — a
+    /// plain UserDefaults flag doesn't re-apply the ManagedSettings change itself on
+    /// its own, it just remembers what the person chose last.
+    func reapplyAppStoreBlock() {
+        if isAppStoreBlocked() {
+            store.application.blockedApplications = [Application(bundleIdentifier: appStoreBundleID)]
+        }
+    }
 
     /// Requests the Family Controls authorization prompt (the one system "Screen Time"
     /// permission dialog) if not already granted. Must happen before the picker can be
@@ -58,9 +88,16 @@ final class AppBlocking {
     /// right after the picker returns and once at launch, so a shield picked yesterday
     /// is still in force today without the user re-opening the picker.
     func reapplySavedShield() {
+        ClockIntegrityGuard.checkAndRecord()
         let selection = loadSelection()
         applyShield(selection)
     }
+
+    /// Whether the clock looked tampered with on the most recent check (main app or the
+    /// extension, whichever ran last) — see ClockIntegrityGuard's own header comment for
+    /// the honest limits of what this can actually catch.
+    func clockTamperDetected() -> Bool { ClockIntegrityGuard.wasTamperedRecently() }
+    func clearClockTamperFlag() { ClockIntegrityGuard.clearTamperFlag() }
 
     private func applyShield(_ selection: FamilyActivitySelection) {
         store.shield.applications = selection.applicationTokens.isEmpty ? nil : selection.applicationTokens

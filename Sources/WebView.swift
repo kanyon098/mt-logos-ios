@@ -106,6 +106,7 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         // persists itself at the OS level; ManagedSettingsStore does too, but applying it
         // again here is cheap and removes any doubt about it surviving a relaunch.
         AppBlocking.shared.reapplySavedShield()
+        AppBlocking.shared.reapplyAppStoreBlock()
 
         let refresh = UIRefreshControl()
         refresh.addTarget(self, action: #selector(pullToRefresh), for: .valueChanged)
@@ -244,6 +245,23 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                 AppBlocking.shared.clear { ok in
                     AppDelegate.shared?.webView?.evaluateJavaScript("window.__appBlockingResult && window.__appBlockingResult(\(ok ? "true" : "false"), 0, null)")
                 }
+            // One-tap App Store block (2026-10-11) — a separate, simpler mechanism from
+            // the picker-based commands above, see AppBlocking.swift's
+            // setAppStoreBlocked()/isAppStoreBlocked() for why this doesn't need a picker.
+            case "toggleAppStore":
+                let newState = !AppBlocking.shared.isAppStoreBlocked()
+                AppBlocking.shared.setAppStoreBlocked(newState)
+                AppDelegate.shared?.webView?.evaluateJavaScript("window.__appStoreBlockStatus && window.__appStoreBlockStatus(\(newState ? "true" : "false"))")
+            case "appStoreStatus":
+                AppDelegate.shared?.webView?.evaluateJavaScript("window.__appStoreBlockStatus && window.__appStoreBlockStatus(\(AppBlocking.shared.isAppStoreBlocked() ? "true" : "false"))")
+            // Clock-tamper flag (2026-10-11) — see ClockIntegrityGuard. "clearTamper" is
+            // how the person acknowledges they saw the note, same one-way ack pattern as
+            // any other dismissible warning; it does NOT undo whatever triggered it.
+            case "tamperStatus":
+                AppDelegate.shared?.webView?.evaluateJavaScript("window.__appStoreBlockStatus && window.__appStoreBlockStatus(\(AppBlocking.shared.clockTamperDetected() ? "true" : "false"))")
+            case "clearTamper":
+                AppBlocking.shared.clearClockTamperFlag()
+                AppDelegate.shared?.webView?.evaluateJavaScript("window.__appStoreBlockStatus && window.__appStoreBlockStatus(false)")
             default:
                 let (isActive, count) = AppBlocking.shared.status()
                 AppDelegate.shared?.webView?.evaluateJavaScript("window.__appBlockingStatus && window.__appBlockingStatus(\(isActive ? "true" : "false"), \(count))")

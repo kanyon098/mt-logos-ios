@@ -121,3 +121,55 @@ final class AppBlockingRulesStore {
         return data.base64EncodedString()
     }
 }
+
+/* "Prevent time change" (2026-10-11, Kanyon: "a toggle that blocks the user from
+   changing the time bypassing the blocking"). Real talk, stated plainly rather than
+   oversold: no sandboxed, non-MDM-supervised app can actually PREVENT someone from
+   opening Settings and changing the system clock — that's a hard iOS restriction, not
+   a gap in this code. What a real app CAN do is DETECT when the clock looks like it
+   jumped in a way real elapsed time can't explain, and respond defensively (stay
+   blocked rather than trust a suspicious clock) — that's what this does. Not
+   foolproof, same honest limit as every other accountability feature in this app;
+   catches the common case (someone winds the clock forward/back to dodge an unlock
+   window or reset a budget) rather than a truly determined, technically sophisticated
+   attempt. */
+struct ClockIntegrityGuard {
+    private static let suiteName = "group.com.mtlogos.app"
+    private static let wallKey = "mtlogos.clockCheck.wall"
+    private static let uptimeKey = "mtlogos.clockCheck.uptime"
+    private static let tamperedKey = "mtlogos.clockCheck.tampered"
+    private static var defaults: UserDefaults? { UserDefaults(suiteName: suiteName) }
+
+    /// Call on every app launch and every time the monitor extension fires. Compares
+    /// wall-clock time elapsed since the last check against ProcessInfo's systemUptime
+    /// (monotonic — unaffected by the user changing the wall clock, only reset by an
+    /// actual reboot). A real device reboot also resets uptime, which would otherwise
+    /// look identical to "clock wound backward" — guarded against separately below.
+    /// Returns true if this check found the clock looking tampered with.
+    @discardableResult
+    static func checkAndRecord() -> Bool {
+        let now = Date().timeIntervalSince1970
+        let uptime = ProcessInfo.processInfo.systemUptime
+        defer { defaults?.set(now, forKey: wallKey); defaults?.set(uptime, forKey: uptimeKey) }
+        guard let lastWall = defaults?.double(forKey: wallKey), lastWall > 0,
+              let lastUptime = defaults?.double(forKey: uptimeKey) else { return false }
+        let wallDelta = now - lastWall
+        let uptimeDelta = uptime - lastUptime
+        guard uptimeDelta >= 0 else { return false }   // uptime went backward = a real reboot, not tampering
+        let drift = abs(wallDelta - uptimeDelta)
+        let tampered = drift > 300   // 5-minute tolerance for normal NTP/timezone edge cases
+        if tampered { defaults?.set(true, forKey: tamperedKey) }
+        return tampered
+    }
+
+    /// Whether the most recent check (from either the main app or the extension) found
+    /// tampering — surfaced to the web UI so the person (and eventually their
+    /// accountability partner) can see it happened, rather than it being silent.
+    static func wasTamperedRecently() -> Bool {
+        defaults?.bool(forKey: tamperedKey) ?? false
+    }
+
+    static func clearTamperFlag() {
+        defaults?.set(false, forKey: tamperedKey)
+    }
+}

@@ -57,6 +57,13 @@ class MonitorExtension: DeviceActivityMonitor {
     }
 
     private func tryUnshield(_ token: ApplicationToken) {
+        // Clock-tamper check (see ClockIntegrityGuard's own header comment) — if the
+        // wall clock looks like it jumped in a way real elapsed time can't explain,
+        // don't trust this window's timing enough to lift the block.
+        if ClockIntegrityGuard.checkAndRecord() {
+            shield(token)
+            return
+        }
         let rule = AppBlockingRulesStore.shared.rule(for: token)
         if let cooldown = rule.cooldownMinutes,
            let last = AppBlockingRulesStore.shared.lastUnshieldTime(for: token),
