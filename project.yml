@@ -103,6 +103,21 @@ targets:
         # using the matching group id in both targets' entitlements.
         com.apple.security.application-groups:
           - group.com.mtlogos.app
+        # Universal Links (2026-10-20) — real bug reported live: an accountability
+        # partner's share link/referral link tapped on a phone with this app already
+        # installed still opened mtlogos.com in Safari instead of this app. Root cause
+        # was two separate gaps, both closed together: the Worker's
+        # /.well-known/apple-app-site-association route (worker/src/index.js) builds its
+        # `applinks.details[].appIDs` from the IOS_APP_ID var in wrangler.toml, which was
+        # empty — set to "QKPAT27SX9.com.mtlogos.app" (this project's own DEVELOPMENT_TEAM
+        # + bundle id, see below) in the same pass as this entitlement — but AASA alone
+        # does nothing without the app ITSELF declaring it wants to handle mtlogos.com
+        # links, which is this entitlement, never declared before now. See
+        # ContentView.onOpenURL (WebView.swift) for the half that actually routes an
+        # incoming link to the right in-app page once iOS hands it over.
+        com.apple.developer.associated-domains:
+          - applinks:mtlogos.com
+          - applinks:www.mtlogos.com
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mtlogos.app
@@ -138,7 +153,6 @@ targets:
         # CI build today failed at Upload to TestFlight even before the provisioning
         # errors: Apple rejects re-uploading an already-used (version, build) pair,
         # and (4.1.0, 11) was already live from 10-08.
-        MARKETING_VERSION: "4.2.0"
         # Apple rejects re-uploading the same (version, build) pair. Bump this every
         # time a new build is pushed to main; reset to "1" alongside a new
         # MARKETING_VERSION if you prefer, but never reuse a pair.
@@ -149,7 +163,10 @@ targets:
         # duplicate (version, build) pair afterward, so one or both of 46/47 may not
         # actually show up usable in TestFlight. This build (13) is the first clean,
         # unambiguous one since the App Store toggle/clock-tamper code landed.
-        CURRENT_PROJECT_VERSION: "21"
+        # 4.2.1 (22), 2026-10-20: Universal Links fix (see the associated-domains
+        # entitlement comment above) — a real native capability change, not cosmetic.
+        MARKETING_VERSION: "4.2.1"
+        CURRENT_PROJECT_VERSION: "22"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
@@ -221,8 +238,8 @@ targets:
         PRODUCT_NAME: "MtLogos Monitor"
         # Must match the main MtLogos target's version exactly — Apple validates an
         # embedded extension's version against its host app at upload time.
-        MARKETING_VERSION: "4.2.0"
-        CURRENT_PROJECT_VERSION: "21"
+        MARKETING_VERSION: "4.2.1"
+        CURRENT_PROJECT_VERSION: "22"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9

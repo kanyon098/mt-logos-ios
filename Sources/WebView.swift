@@ -155,6 +155,19 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         webView.load(URLRequest(url: homeURL))
     }
 
+    /* Universal Link entry point — see project.yml's associated-domains entitlement
+       comment for the other half of this fix (the AASA/entitlement plumbing that gets
+       iOS to hand a tapped mtlogos.com link to THIS app at all instead of Safari). Once
+       iOS does hand it over, SwiftUI's .onOpenURL below calls this with the exact URL
+       that was tapped — a referral link, an accountability pairing link, whatever path
+       it was — and this just loads it straight into the same webView already on
+       screen, same as any other in-app navigation. allowedHosts re-used rather than a
+       second list, so this can never open a host the rest of the app wouldn't. */
+    func openUniversalLink(_ url: URL) {
+        guard allowedHosts.contains(url.host ?? "") else { return }
+        webView.load(URLRequest(url: url))
+    }
+
     @objc private func pullToRefresh() {
         webView.reload()
         webView.scrollView.refreshControl?.endRefreshing()
@@ -418,6 +431,32 @@ struct ContentView: View {
             // weak reference, never re-creates anything.
             AppDelegate.shared?.webView = store.webView
             if store.webView.url == nil { store.load() }
+        }
+        // Universal Links land here — see WebViewStore.openUniversalLink's own comment
+        // and project.yml's associated-domains entitlement for the full picture.
+        .onOpenURL { url in store.openUniversalLink(url) }
+        /* 2026-10-20, Kanyon, real bug: "when i open up the app it'll make me click it
+           once and then click it twice... the first tap nonfunctional." A background
+           Explore agent traced this to a well-documented WebKit behavior: a WKWebView's
+           document starts with no window focus, and the page's own focus event only
+           fires after the FIRST touch — so that first tap gets consumed re-establishing
+           focus/responder state instead of reaching the page as a real click, and the
+           second tap on the same element then works normally. didBecomeActiveNotification
+           fires both right after a cold launch finishes AND every time the app returns
+           from the background/app-switcher — the two moments this was actually reported
+           for. Forcing the webview to resign and re-become first responder there is the
+           standard native-side nudge for this WebKit quirk: it re-runs that focus
+           handshake itself, ahead of the user's first real tap, instead of letting that
+           tap be the thing that triggers it. Low-risk either way — resign/become
+           firstResponder on a WKWebView doesn't touch page state or JS — but this is a
+           best-effort mitigation for an underlying WebKit bug, not a confirmed root-cause
+           fix; verify on a real device (open the app, tap immediately) before assuming
+           it's fully gone. */
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                store.webView.resignFirstResponder()
+                store.webView.becomeFirstResponder()
+            }
         }
     }
 }
