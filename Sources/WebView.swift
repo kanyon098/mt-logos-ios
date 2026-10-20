@@ -138,6 +138,9 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         // mtλapp.html — see "appBlocking" below and AppBlocking.swift. Separate feature
         // from dnsFilter above on purpose; see AppBlocking.swift's own long comment.
         webView.configuration.userContentController.add(self, name: "appBlocking")
+        // Bridge for native Apple In-App Purchase (the /pay screen, app-shell mode) —
+        // see "iap" below and IAPManager.swift.
+        webView.configuration.userContentController.add(self, name: "iap")
         // A shield picked in an earlier session should still be in force on this one —
         // DnsFilter has no equivalent because NEDNSSettingsManager's setting already
         // persists itself at the OS level; ManagedSettingsStore does too, but applying it
@@ -333,6 +336,65 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             default:
                 let (isActive, count) = AppBlocking.shared.status()
                 AppDelegate.shared?.webView?.evaluateJavaScript("window.__appBlockingStatus && window.__appBlockingStatus(\(isActive ? "true" : "false"), \(count))")
+            }
+            return
+        }
+        if message.name == "iap" {
+            // body is {command:"products"|"buy"|"restore", productId?:"..."} — see
+            // IAPManager.swift for the actual purchase flow; this just bridges it to
+            // the /pay screen's JS (mtλapp.html, app-shell mode). All three
+            // IAPManager calls are async, so each branch runs its own Task rather
+            // than blocking this synchronous delegate callback.
+            let body = message.body as? [String: Any]
+            let command = (body?["command"] as? String) ?? "products"
+            switch command {
+            case "products":
+                Task {
+                    await IAPManager.shared.loadProducts()
+                    let products = await IAPManager.shared.products
+                    let items = products.map { p in
+                        "{\"id\":\(jsStringLiteral(p.id)),\"displayName\":\(jsStringLiteral(p.displayName)),\"displayPrice\":\(jsStringLiteral(p.displayPrice))}"
+                    }
+                    let json = "[" + items.joined(separator: ",") + "]"
+                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapProducts && window.__iapProducts(\(json))")
+                }
+            case "buy":
+                guard let productId = body?["productId"] as? String else {
+                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, \(jsStringLiteral("Missing product.")))")
+                    return
+                }
+                Task {
+                    await IAPManager.shared.loadProducts()
+                    let products = await IAPManager.shared.products
+                    guard let product = products.first(where: { $0.id == productId }) else {
+                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, \(jsStringLiteral("That item isn’t available right now.")))")
+                        return
+                    }
+                    let result = await IAPManager.shared.purchase(product)
+                    switch result {
+                    case .success:
+                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(true, null)")
+                    case .failure(.cancelled):
+                        // A cancel isn't an error worth a message — the web UI just
+                        // goes back to whatever it showed before the purchase sheet.
+                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, null)")
+                    case .failure(.noAccountToken):
+                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, \(jsStringLiteral("Could not reach your account — check your connection and try again.")))")
+                    case .failure(.pending):
+                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, \(jsStringLiteral("This purchase needs approval (Ask to Buy) — it’ll finish once that’s approved.")))")
+                    case .failure(.storeKit(let error)):
+                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, \(jsStringLiteral(error.localizedDescription)))")
+                    case .failure(.unknown):
+                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, \(jsStringLiteral("Something went wrong.")))")
+                    }
+                }
+            case "restore":
+                Task {
+                    await IAPManager.shared.restorePurchases()
+                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapRestoreResult && window.__iapRestoreResult(true)")
+                }
+            default:
+                break
             }
             return
         }
