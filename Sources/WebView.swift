@@ -372,8 +372,8 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                     }
                     let result = await IAPManager.shared.purchase(product)
                     switch result {
-                    case .success:
-                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(true, null)")
+                    case .success(let originalTransactionId):
+                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(true, null, \(jsStringLiteral(originalTransactionId)), \(jsStringLiteral(productId)))")
                     case .failure(.cancelled):
                         // A cancel isn't an error worth a message — the web UI just
                         // goes back to whatever it showed before the purchase sheet.
@@ -390,8 +390,12 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                 }
             case "restore":
                 Task {
-                    await IAPManager.shared.restorePurchases()
-                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapRestoreResult && window.__iapRestoreResult(true)")
+                    let found = await IAPManager.shared.restorePurchases()
+                    if let found {
+                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapRestoreResult && window.__iapRestoreResult(true, \(jsStringLiteral(found.originalTransactionId)), \(jsStringLiteral(found.productId)))")
+                    } else {
+                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapRestoreResult && window.__iapRestoreResult(false, null, null)")
+                    }
                 }
             default:
                 break

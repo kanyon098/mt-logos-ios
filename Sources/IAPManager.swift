@@ -77,7 +77,15 @@ final class IAPManager: NSObject, ObservableObject {
     /// carry an email. A purchase that can't get a token is refused outright
     /// rather than letting someone pay for something that could never actually
     /// get linked back to their account.
-    func purchase(_ product: Product) async -> Result<Void, IAPError> {
+    ///
+    /// On success, returns the transaction's originalTransactionID — NOT itself a
+    /// grant of anything (see finishLocally's comment: this client's own report is
+    /// never trusted), but handed back to the web page so it can call
+    /// /api/apple/confirm and get an immediate answer instead of waiting on
+    /// Apple's server notification, which can take anywhere from seconds to a few
+    /// minutes to arrive. Same "beat the webhook" shape the Stripe flow already
+    /// uses for its own ?paid=1/?skopo_unlocked=1 return-trip handlers.
+    func purchase(_ product: Product) async -> Result<String, IAPError> {
         guard let token = await fetchAccountToken() else { return .failure(.noAccountToken) }
         purchaseInFlight = true
         defer { purchaseInFlight = false }
@@ -85,8 +93,9 @@ final class IAPManager: NSObject, ObservableObject {
             let result = try await product.purchase(options: [.appAccountToken(token)])
             switch result {
             case .success(let verification):
-                await finishLocally(verification)
-                return .success(())
+                let originalId = await finishLocally(verification)
+                guard let originalId else { return .failure(.unknown) }   // verification failed StoreKit's own check
+                return .success(originalId)
             case .userCancelled:
                 return .failure(.cancelled)
             case .pending:
@@ -100,23 +109,47 @@ final class IAPManager: NSObject, ObservableObject {
     }
 
     /// "Restore purchases" — re-syncs StoreKit's local transaction list from
-    /// Apple, which re-feeds Transaction.updates for anything this device doesn't
-    /// already know about (a reinstall, a purchase made on another device).
-    func restorePurchases() async {
+    /// Apple (a reinstall, or a purchase made on another device signed into the
+    /// same Apple ID), then looks at what's CURRENTLY entitled on this Apple ID
+    /// for our three known products. Returns the same (originalTransactionId,
+    /// productId) shape purchase() does, for the EXACT same reason: a restored
+    /// transaction already carries whatever appAccountToken it was purchased
+    /// with, so running it through the same /api/apple/confirm round-trip (see
+    /// the "iap" bridge in WebView.swift) is what actually reconnects it to this
+    /// account server-side — AppStore.sync() alone only affects this device's
+    /// local StoreKit state, it never calls back to the Worker on its own.
+    /// Prefers an active base-plan subscription over Skopo if somehow both are
+    /// current, since the base plan is what actually gates the whole app.
+    func restorePurchases() async -> (originalTransactionId: String, productId: String)? {
         try? await AppStore.sync()
+        var skopoFound: (String, String)? = nil
+        for await entitlement in Transaction.currentEntitlements {
+            guard case .verified(let transaction) = entitlement else { continue }
+            guard MtLogosProduct.all.contains(transaction.productID) else { continue }
+            let found = (String(transaction.originalID), transaction.productID)
+            if transaction.productID == MtLogosProduct.skopo { skopoFound = found } else { return found }
+        }
+        return skopoFound
     }
 
     /// StoreKit's OWN on-device signature check (Apple's framework verifying its
     /// own receipt) — unrelated to, and not a substitute for, the server-side
     /// trust model described in index.js: the server never trusts what THIS
     /// client reports either, it always re-asks Apple directly once the webhook
-    /// fires. This just filters out a tampered local transaction before bothering
-    /// to finish() it, and calls finish() so it stops reappearing in
-    /// Transaction.updates forever — no direct "I bought it" call to the Worker
-    /// here, on purpose.
-    private func finishLocally(_ verification: VerificationResult<Transaction>) async {
-        guard case .verified(let transaction) = verification else { return }
+    /// fires or /api/apple/confirm is called. This just filters out a tampered
+    /// local transaction before bothering to finish() it, and calls finish() so
+    /// it stops reappearing in Transaction.updates forever — no direct "I bought
+    /// it" call to the Worker here, on purpose. Returns the transaction's
+    /// originalID (as a string) on a verified transaction, so purchase() above
+    /// can hand it to the web page; the Transaction.updates listener in init()
+    /// just discards it, since a background-delivered update has no in-flight
+    /// JS call waiting on an answer.
+    @discardableResult
+    private func finishLocally(_ verification: VerificationResult<Transaction>) async -> String? {
+        guard case .verified(let transaction) = verification else { return nil }
+        let originalId = String(transaction.originalID)
         await transaction.finish()
+        return originalId
     }
 
     /// URLSession and WKWebView keep SEPARATE cookie jars on iOS by default — the
