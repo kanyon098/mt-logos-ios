@@ -165,8 +165,19 @@ targets:
         # unambiguous one since the App Store toggle/clock-tamper code landed.
         # 4.2.1 (22), 2026-10-20: Universal Links fix (see the associated-domains
         # entitlement comment above) — a real native capability change, not cosmetic.
-        MARKETING_VERSION: "4.2.1"
-        CURRENT_PROJECT_VERSION: "22"
+        # 4.3.1 (23), 2026-10-21: Apple In-App Purchase (IAPManager.swift + the "iap"
+        # WKScriptMessageHandler bridge in WebView.swift) — the fix for Apple's 3.1.1
+        # rejection on submission d8a76719 ("Version reviewed: 4.3.0 (21)": that pair
+        # was never produced by a commit in THIS repo's own history — the last one
+        # pushed before this was 4.2.1 (22) — so it must have come from a submission
+        # made outside this pipeline; picking 4.3.1/23, higher than BOTH numbers in
+        # that mismatched pair and the last real commit here, sidesteps Apple's
+        # strict-increase rule regardless of which train is actually live on their
+        # side). No new entitlement needed — unlike Push/Associated Domains/Family
+        # Controls, in-app purchase capability doesn't require one; StoreKit works
+        # off the Product IDs created directly in App Store Connect.
+        MARKETING_VERSION: "4.3.1"
+        CURRENT_PROJECT_VERSION: "23"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
@@ -238,8 +249,8 @@ targets:
         PRODUCT_NAME: "MtLogos Monitor"
         # Must match the main MtLogos target's version exactly — Apple validates an
         # embedded extension's version against its host app at upload time.
-        MARKETING_VERSION: "4.2.1"
-        CURRENT_PROJECT_VERSION: "22"
+        MARKETING_VERSION: "4.3.1"
+        CURRENT_PROJECT_VERSION: "23"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9
