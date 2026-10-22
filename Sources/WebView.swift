@@ -356,10 +356,13 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                         "{\"id\":\(jsStringLiteral(p.id)),\"displayName\":\(jsStringLiteral(p.displayName)),\"displayPrice\":\(jsStringLiteral(p.displayPrice))}"
                     }
                     let json = "[" + items.joined(separator: ",") + "]"
-                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapProducts && window.__iapProducts(\(json))")
+                    _ = try? await AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapProducts && window.__iapProducts(\(json))")
                 }
             case "buy":
                 guard let productId = body?["productId"] as? String else {
+                    // NOT inside the Task below, so this one correctly resolves to the
+                    // old completion-handler evaluateJavaScript overload (same as every
+                    // other non-async call site above) — see the Task-only fix below.
                     AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, \(jsStringLiteral("Missing product.")))")
                     return
                 }
@@ -367,34 +370,34 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                     await IAPManager.shared.loadProducts()
                     let products = await IAPManager.shared.products
                     guard let product = products.first(where: { $0.id == productId }) else {
-                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, \(jsStringLiteral("That item isn’t available right now.")))")
+                        _ = try? await AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, \(jsStringLiteral("That item isn’t available right now.")))")
                         return
                     }
                     let result = await IAPManager.shared.purchase(product)
                     switch result {
                     case .success(let originalTransactionId):
-                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(true, null, \(jsStringLiteral(originalTransactionId)), \(jsStringLiteral(productId)))")
+                        _ = try? await AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(true, null, \(jsStringLiteral(originalTransactionId)), \(jsStringLiteral(productId)))")
                     case .failure(.cancelled):
                         // A cancel isn't an error worth a message — the web UI just
                         // goes back to whatever it showed before the purchase sheet.
-                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, null)")
+                        _ = try? await AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, null)")
                     case .failure(.noAccountToken):
-                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, \(jsStringLiteral("Could not reach your account — check your connection and try again.")))")
+                        _ = try? await AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, \(jsStringLiteral("Could not reach your account — check your connection and try again.")))")
                     case .failure(.pending):
-                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, \(jsStringLiteral("This purchase needs approval (Ask to Buy) — it’ll finish once that’s approved.")))")
+                        _ = try? await AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, \(jsStringLiteral("This purchase needs approval (Ask to Buy) — it’ll finish once that’s approved.")))")
                     case .failure(.storeKit(let error)):
-                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, \(jsStringLiteral(error.localizedDescription)))")
+                        _ = try? await AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, \(jsStringLiteral(error.localizedDescription)))")
                     case .failure(.unknown):
-                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, \(jsStringLiteral("Something went wrong.")))")
+                        _ = try? await AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, \(jsStringLiteral("Something went wrong.")))")
                     }
                 }
             case "restore":
                 Task {
                     let found = await IAPManager.shared.restorePurchases()
                     if let found {
-                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapRestoreResult && window.__iapRestoreResult(true, \(jsStringLiteral(found.originalTransactionId)), \(jsStringLiteral(found.productId)))")
+                        _ = try? await AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapRestoreResult && window.__iapRestoreResult(true, \(jsStringLiteral(found.originalTransactionId)), \(jsStringLiteral(found.productId)))")
                     } else {
-                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapRestoreResult && window.__iapRestoreResult(false, null, null)")
+                        _ = try? await AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapRestoreResult && window.__iapRestoreResult(false, null, null)")
                     }
                 }
             default:
