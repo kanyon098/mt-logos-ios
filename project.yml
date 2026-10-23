@@ -176,8 +176,16 @@ targets:
         # side). No new entitlement needed — unlike Push/Associated Domains/Family
         # Controls, in-app purchase capability doesn't require one; StoreKit works
         # off the Product IDs created directly in App Store Connect.
-        MARKETING_VERSION: "4.3.1"
-        CURRENT_PROJECT_VERSION: "23"
+        # 4.3.2 (24), 2026-10-22: real live bug report the same day 4.3.1 shipped —
+        # "the buttons keep freezing and i have to close the app and reopen", all
+        # buttons, no clear trigger. Root cause: the "iap" bridge's three Task{}
+        # closures in WebView.swift ran evaluateJavaScript() off the main actor —
+        # see that file's own comment on the fix for the full mechanism. Since this
+        # whole app is ONE shared WKWebView (every tab, not just /pay), a single bad
+        # off-main hop there could plausibly wedge the webview for the entire app,
+        # not just the purchase screen. NOT DEVICE-VERIFIED as the confirmed cause.
+        MARKETING_VERSION: "4.3.2"
+        CURRENT_PROJECT_VERSION: "24"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
@@ -249,8 +257,8 @@ targets:
         PRODUCT_NAME: "MtLogos Monitor"
         # Must match the main MtLogos target's version exactly — Apple validates an
         # embedded extension's version against its host app at upload time.
-        MARKETING_VERSION: "4.3.1"
-        CURRENT_PROJECT_VERSION: "23"
+        MARKETING_VERSION: "4.3.2"
+        CURRENT_PROJECT_VERSION: "24"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9

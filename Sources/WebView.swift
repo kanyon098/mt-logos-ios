@@ -349,7 +349,24 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             let command = (body?["command"] as? String) ?? "products"
             switch command {
             case "products":
-                Task {
+                // @MainActor on the Task itself, not just the IAPManager calls inside it —
+                // a plain `Task { }` here does NOT inherit the main thread just because
+                // userContentController(_:didReceive:) was called on it; it runs on the
+                // global concurrent executor, and execution resumes there (not back on
+                // main) after each `await` returns. Every evaluateJavaScript call below
+                // was therefore firing on a background thread — WKWebView is main-thread-
+                // only, and driving it off-main can corrupt its internal state silently
+                // rather than crashing outright. Real report, 2026-10-22, the day this
+                // shipped: "the buttons keep freezing and i have to close the app and
+                // reopen" — exactly the shape of a corrupted shared WKWebView, since this
+                // app is ONE webview for every tab (see this file's own top comment), so a
+                // single bad hop here on the /pay screen could freeze everything, not just
+                // the purchase buttons. NOT DEVICE-VERIFIED that this was really the cause
+                // (no local Mac to reproduce the freeze against) — it is the most concrete,
+                // mechanically sound explanation available given the exact timing, and the
+                // fix is strictly more correct regardless of whether it turns out to be the
+                // whole story.
+                Task { @MainActor in
                     await IAPManager.shared.loadProducts()
                     let products = await IAPManager.shared.products
                     let items = products.map { p in
@@ -366,7 +383,7 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                     AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapPurchaseResult && window.__iapPurchaseResult(false, \(jsStringLiteral("Missing product.")))")
                     return
                 }
-                Task {
+                Task { @MainActor in
                     await IAPManager.shared.loadProducts()
                     let products = await IAPManager.shared.products
                     guard let product = products.first(where: { $0.id == productId }) else {
@@ -392,7 +409,7 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                     }
                 }
             case "restore":
-                Task {
+                Task { @MainActor in
                     let found = await IAPManager.shared.restorePurchases()
                     if let found {
                         _ = try? await AppDelegate.shared?.webView?.evaluateJavaScript("window.__iapRestoreResult && window.__iapRestoreResult(true, \(jsStringLiteral(found.originalTransactionId)), \(jsStringLiteral(found.productId)))")
