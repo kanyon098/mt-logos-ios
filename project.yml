@@ -47,6 +47,11 @@ targets:
         # needs this key on the HOST app or it silently fails, regardless of which
         # in-page feature triggers it.
         NSCameraUsageDescription: "Mt. Logos uses your camera to scan QR codes and take meal or gym photos within the app."
+        # Second blocking-unlock condition (2026-10-29) — BlockLocation.swift. Checked
+        # on demand only (one fix at a time, right when something tries to unlock), so
+        # "When In Use" is enough; no NSLocationAlwaysAndWhenInUseUsageDescription key,
+        # since this app never asks for or uses background/continuous tracking.
+        NSLocationWhenInUseUsageDescription: "Mt. Logos checks your location, only when you try to unlock blocking settings, against the places your accountability partner approved."
         CFBundleIconName: AppIcon
     # Push Notifications capability — added 2026-09-24 for real APNs push (see
     # Push.swift / WebView.swift's "apnsRegister" handler / the APNs module in
@@ -184,8 +189,15 @@ targets:
         # whole app is ONE shared WKWebView (every tab, not just /pay), a single bad
         # off-main hop there could plausibly wedge the webview for the entire app,
         # not just the purchase screen. NOT DEVICE-VERIFIED as the confirmed cause.
-        MARKETING_VERSION: "4.3.2"
-        CURRENT_PROJECT_VERSION: "24"
+        # 4.4.0 (25), 2026-10-29: second unlock condition — location — added on top of
+        # the existing partner approval, per Kanyon ("I want to add two conditions to
+        # unlock. Including location"), covering both the DNS adult-content filter and
+        # App Blocking (they already shared one approval gate). New CoreLocation
+        # bridge ("blockLocation", BlockLocation.swift), new NSLocationWhenInUseUsage-
+        # Description key above — "When In Use" only, checked on demand, never
+        # continuous background tracking.
+        MARKETING_VERSION: "4.4.0"
+        CURRENT_PROJECT_VERSION: "25"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
@@ -257,8 +269,8 @@ targets:
         PRODUCT_NAME: "MtLogos Monitor"
         # Must match the main MtLogos target's version exactly — Apple validates an
         # embedded extension's version against its host app at upload time.
-        MARKETING_VERSION: "4.3.2"
-        CURRENT_PROJECT_VERSION: "24"
+        MARKETING_VERSION: "4.4.0"
+        CURRENT_PROJECT_VERSION: "25"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9

@@ -141,6 +141,9 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         // Bridge for native Apple In-App Purchase (the /pay screen, app-shell mode) —
         // see "iap" below and IAPManager.swift.
         webView.configuration.userContentController.add(self, name: "iap")
+        // Bridge for the second blocking-unlock condition (location) — see
+        // "blockLocation" below and BlockLocation.swift.
+        webView.configuration.userContentController.add(self, name: "blockLocation")
         // A shield picked in an earlier session should still be in force on this one —
         // DnsFilter has no equivalent because NEDNSSettingsManager's setting already
         // persists itself at the OS level; ManagedSettingsStore does too, but applying it
@@ -419,6 +422,23 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                 }
             default:
                 break
+            }
+            return
+        }
+        if message.name == "blockLocation" {
+            // body is "check" — see blockLocationCheck() in mtλapp.html, waiting on
+            // window.__blockLocationResult. See BlockLocation.swift for the whole
+            // on-device check; @MainActor here for the same reason every "iap" branch
+            // above needs it — evaluateJavaScript must run on the main thread, and a
+            // plain Task{} does not inherit that just because this delegate callback
+            // happened to run on it (see the "iap" products case's own long comment).
+            Task { @MainActor in
+                let result = await BlockLocation.shared.check()
+                let labelArg = result.nearestLabel == nil ? "null" : jsStringLiteral(result.nearestLabel!)
+                let milesArg = result.nearestMiles == nil ? "null" : String(result.nearestMiles!)
+                let errArg = result.error == nil ? "null" : jsStringLiteral(result.error!)
+                _ = try? await AppDelegate.shared?.webView?.evaluateJavaScript(
+                    "window.__blockLocationResult && window.__blockLocationResult(\(result.atLocation ? "true" : "false"), \(labelArg), \(milesArg), \(errArg))")
             }
             return
         }
