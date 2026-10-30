@@ -150,6 +150,7 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         // again here is cheap and removes any doubt about it surviving a relaunch.
         AppBlocking.shared.reapplySavedShield()
         AppBlocking.shared.reapplyAppStoreBlock()
+        AppBlocking.shared.reapplyDeletionBlock()
 
         let refresh = UIRefreshControl()
         refresh.addTarget(self, action: #selector(pullToRefresh), for: .valueChanged)
@@ -321,6 +322,19 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                 }
             case "appStoreStatus":
                 AppDelegate.shared?.webView?.evaluateJavaScript("window.__appStoreBlockStatus && window.__appStoreBlockStatus(\(AppBlocking.shared.isAppStoreBlocked() ? "true" : "false"))")
+            // Deletion blocking (2026-10-30) — see AppBlocking.swift's
+            // setDeletionBlocked()/isDeletionBlocked(). Own callback, same reasoning as
+            // tamperStatus/clearTamper just below: setDeletionBlocked can also await the
+            // real system Screen Time dialog, so it needs its own channel rather than
+            // sharing __appStoreBlockStatus's resolve slot.
+            case "toggleDeletionBlock":
+                let wantsOn = !AppBlocking.shared.isDeletionBlocked()
+                AppBlocking.shared.setDeletionBlocked(wantsOn) { ok in
+                    let reportedState = ok ? wantsOn : AppBlocking.shared.isDeletionBlocked()
+                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__deletionBlockStatus && window.__deletionBlockStatus(\(reportedState ? "true" : "false"))")
+                }
+            case "deletionBlockStatus":
+                AppDelegate.shared?.webView?.evaluateJavaScript("window.__deletionBlockStatus && window.__deletionBlockStatus(\(AppBlocking.shared.isDeletionBlocked() ? "true" : "false"))")
             // Clock-tamper flag (2026-10-11) — see ClockIntegrityGuard. "clearTamper" is
             // how the person acknowledges they saw the note, same one-way ack pattern as
             // any other dismissible warning; it does NOT undo whatever triggered it.

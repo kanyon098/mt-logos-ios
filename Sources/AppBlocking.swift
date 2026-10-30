@@ -28,6 +28,7 @@ final class AppBlocking {
     private let defaultsKey = "mtlogos.appBlockingSelection"
     private let appStoreBlockedKey = "mtlogos.appStoreBlocked"
     private let appStoreBundleID = "com.apple.AppStore"
+    private let deletionBlockedKey = "mtlogos.deletionBlocked"
 
     /// One-tap App Store block (2026-10-11, Kanyon: "a toggle that blocks the app store").
     /// Deliberately a SEPARATE mechanism from the picker-based shield.applications above —
@@ -77,6 +78,48 @@ final class AppBlocking {
         if isAppStoreBlocked() {
             store.application.blockedApplications = [Application(bundleIdentifier: appStoreBundleID)]
         }
+    }
+
+    /// Deletion blocking (2026-10-30), Kanyon: "have you also added the toggle that
+    /// makes it so the user cannot delete the mt logos app to bypass the blockers?" —
+    /// real gap the comment at the top of block_edit_requests (worker/src/index.js)
+    /// had flagged back on 2026-10-07 ("apps, sites, deletion-prevention... a later,
+    /// separate piece") but this was never actually built, so until now simply
+    /// deleting Mt. Logos bypassed both DnsFilter and the shield above completely.
+    /// `Application.denyAppRemoval` is a real ManagedSettings property (iOS 16+, same
+    /// Family Controls authorization already in use here, no new entitlement) —
+    /// DEVICE-WIDE by design: Apple gives no way to protect just one app from
+    /// deletion, only "deleting any app is off" as a whole. Turning it ON is free, same
+    /// "no condition needed to add protection" rule as DnsFilter.enable()/the App
+    /// Store block; turning it OFF is gated behind the SAME two-condition (partner
+    /// approval + location) check as every other edit here — see "deletionBlocking" in
+    /// WebView.swift and blockingCanEdit() in mtλapp.html — otherwise this toggle
+    /// alone would let someone delete the app and walk straight around both blockers.
+    func setDeletionBlocked(_ on: Bool, completion: @escaping (Bool) -> Void) {
+        guard on else {
+            UserDefaults.standard.set(false, forKey: deletionBlockedKey)
+            store.application.denyAppRemoval = false
+            completion(true)
+            return
+        }
+        Task { @MainActor in
+            guard await ensureAuthorized() else {
+                completion(false)
+                return
+            }
+            UserDefaults.standard.set(true, forKey: deletionBlockedKey)
+            store.application.denyAppRemoval = true
+            completion(true)
+        }
+    }
+
+    func isDeletionBlocked() -> Bool {
+        UserDefaults.standard.bool(forKey: deletionBlockedKey)
+    }
+
+    /// Re-applies on every launch, same reasoning as reapplyAppStoreBlock() above.
+    func reapplyDeletionBlock() {
+        if isDeletionBlocked() { store.application.denyAppRemoval = true }
     }
 
     /// Requests the Family Controls authorization prompt (the one system "Screen Time"
