@@ -59,6 +59,52 @@ struct AppBlockRule: Codable, Hashable {
     }
 }
 
+/// Total minutes covered by a set of windows — used below to catch "same number of
+/// windows, but wider" as a loosening even when each individual window still fits
+/// inside where an old one used to be.
+private func windowsCoverMinutes(_ windows: [TimeWindow]) -> Int {
+    windows.reduce(0) { $0 + max(0, $1.endMinute - $1.startMinute) }
+}
+/// A new window only counts as "not looser" if it sits entirely inside ONE old window —
+/// allowing it to be stitched together from the gap between two old windows would let
+/// genuinely new unlocked time sneak in disguised as "still inside the old windows."
+private func windowContainedInUnion(_ w: TimeWindow, _ oldWindows: [TimeWindow]) -> Bool {
+    oldWindows.contains { $0.startMinute <= w.startMinute && w.endMinute <= $0.endMinute }
+}
+/// Whether `new` is at least as strict as `old`, tier by tier — Kanyon (2026-10-30):
+/// "you should be able to make any blocking more tight while the block is active, but
+/// not less tight unless the partner unlocks it." Used by AppRuleEditView (commit())
+/// and AppBlocking.presentRuleEditor()/presentPicker() to decide whether a change can
+/// just happen, or needs the same partner-approval gate as everything else here.
+/// Short-circuits the moment either side is "fully blocked" (unlockWindows empty) —
+/// that's the tightest possible state regardless of what any deeper tier says, so
+/// nothing past tier 1 is a meaningful comparison once that's true on either side.
+func appBlockRuleIsTighterOrEqual(from old: AppBlockRule, to new: AppBlockRule) -> Bool {
+    if new.unlockWindows.isEmpty { return true }    // going fully blocked is always fine
+    if old.unlockWindows.isEmpty { return false }    // had none, now has some — a loosening
+    guard new.unlockWindows.allSatisfy({ windowContainedInUnion($0, old.unlockWindows) }) else { return false }
+    guard windowsCoverMinutes(new.unlockWindows) <= windowsCoverMinutes(old.unlockWindows) else { return false }
+    // Budget (tier 2): nil = no cap = loosest; a smaller cap is tighter.
+    switch (old.budgetMinutes, new.budgetMinutes) {
+    case (.some, nil): return false
+    case (.some(let o), .some(let n)): if n > o { return false }
+    default: break
+    }
+    // Cooldown (tier 3): nil = no required gap = loosest; a LARGER cooldown is tighter.
+    switch (old.cooldownMinutes, new.cooldownMinutes) {
+    case (.some, nil): return false
+    case (.some(let o), .some(let n)): if n < o { return false }
+    default: break
+    }
+    // Session limit (tier 4): nil = no limit = loosest; a smaller limit is tighter.
+    switch (old.sessionLimitMinutes, new.sessionLimitMinutes) {
+    case (.some, nil): return false
+    case (.some(let o), .some(let n)): if n > o { return false }
+    default: break
+    }
+    return true
+}
+
 /// Keyed by ApplicationToken — Apple's own opaque, Codable, Hashable identifier for a
 /// selected app. Never resolvable back to a bundle id or readable name from app code
 /// (by Apple's design, see AppBlocking.swift's header comment); the native rule-editor

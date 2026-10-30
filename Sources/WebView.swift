@@ -277,21 +277,30 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             return
         }
         if message.name == "appBlocking" {
-            // body is one of "pickApps" | "editRules" | "clear" | "status" — see
-            // appBlockingCall() in mtλapp.html, waiting on window.__appBlockingResult.
-            // pickApps and editRules are both gated behind the SAME accountability-
-            // partner approval the web page already checks before ever posting either
-            // command here (renderAppBlockingSettings()) — not re-checked natively,
-            // same honesty-not-lock-out model as DnsFilter.disable() and the DNS toggle
-            // itself: the gate lives in the UI the person sees, not a tamper-proof wall.
-            let command = (message.body as? String) ?? "status"
+            // body is either a plain command string ("clear" | "status" | "toggleAppStore" |
+            // etc. — unchanged) or, for pickApps/editRules only, a JSON string
+            // {"cmd":"pickApps","canEdit":true} — see appBlockingCall() in mtλapp.html.
+            // canEdit (2026-10-30) is what the web page already determined from the SAME
+            // accountability-partner gate as before; AppBlocking.swift uses it to decide
+            // whether a LOOSENING edit (removing a blocked app, loosening a rule tier)
+            // sticks or gets reverted — tightening is always allowed regardless. Not
+            // re-verified natively, same honesty-not-lock-out model as DnsFilter.disable()
+            // and the DNS toggle itself: the gate lives in the UI the person sees.
+            let rawBody = (message.body as? String) ?? "status"
+            var command = rawBody
+            var requestCanEdit = false
+            if rawBody.hasPrefix("{"), let data = rawBody.data(using: .utf8),
+               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                command = (obj["cmd"] as? String) ?? "status"
+                requestCanEdit = (obj["canEdit"] as? Bool) ?? false
+            }
             switch command {
             case "pickApps":
                 guard let vc = topViewController() else {
                     AppDelegate.shared?.webView?.evaluateJavaScript("window.__appBlockingResult && window.__appBlockingResult(false, 0, \(jsStringLiteral("Could not show the picker.")))")
                     return
                 }
-                AppBlocking.shared.presentPicker(from: vc) { ok, count, errorMessage in
+                AppBlocking.shared.presentPicker(from: vc, canEdit: requestCanEdit) { ok, count, errorMessage in
                     let errArg = errorMessage == nil ? "null" : jsStringLiteral(errorMessage!)
                     AppDelegate.shared?.webView?.evaluateJavaScript("window.__appBlockingResult && window.__appBlockingResult(\(ok ? "true" : "false"), \(count), \(errArg))")
                 }
@@ -300,7 +309,7 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                     AppDelegate.shared?.webView?.evaluateJavaScript("window.__appBlockingResult && window.__appBlockingResult(false, 0, \(jsStringLiteral("Could not show the rule editor.")))")
                     return
                 }
-                AppBlocking.shared.presentRuleEditor(from: vc) { ok in
+                AppBlocking.shared.presentRuleEditor(from: vc, canEdit: requestCanEdit) { ok in
                     AppDelegate.shared?.webView?.evaluateJavaScript("window.__appBlockingResult && window.__appBlockingResult(\(ok ? "true" : "false"), 0, null)")
                 }
             case "clear":

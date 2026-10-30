@@ -9,6 +9,12 @@ import SwiftUI
 
 struct AppRuleListView: View {
     let tokens: [ApplicationToken]
+    /// 2026-10-30, Kanyon: "you should be able to make any blocking more tight while
+    /// the block is active, but not less tight unless the partner unlocks it." When
+    /// false, AppRuleEditView still lets every tightening edit through — it only
+    /// reverts (and warns about) an edit that would loosen the rule below what it
+    /// already was. See appBlockRuleIsTighterOrEqual() in AppBlockingRules.swift.
+    let canEdit: Bool
     let onSave: (ApplicationToken, AppBlockRule) -> Void
     let onDone: () -> Void
     @State private var rules: [ApplicationToken: AppBlockRule] = AppBlockingRulesStore.shared.loadAll()
@@ -18,6 +24,7 @@ struct AppRuleListView: View {
             List(tokens, id: \.self) { token in
                 NavigationLink(destination: AppRuleEditView(
                     rule: rules[token] ?? AppBlockRule(),
+                    canEdit: canEdit,
                     onChange: { newRule in
                         rules[token] = newRule
                         onSave(token, newRule)
@@ -57,16 +64,25 @@ struct AppRuleListView: View {
 /// then... how much time between opens. And then... how long a session can be."
 struct AppRuleEditView: View {
     @State var rule: AppBlockRule
+    let canEdit: Bool
     let onChange: (AppBlockRule) -> Void
+
+    /// The last rule that was actually either tighter-or-equal, or explicitly allowed
+    /// because canEdit was true at the time — what an invalid (loosening, !canEdit)
+    /// edit reverts back to. See commit() below.
+    @State private var lastGoodRule: AppBlockRule
+    @State private var warning: String? = nil
 
     @State private var hasWindows: Bool
     @State private var hasBudget: Bool
     @State private var hasCooldown: Bool
     @State private var hasSessionLimit: Bool
 
-    init(rule: AppBlockRule, onChange: @escaping (AppBlockRule) -> Void) {
+    init(rule: AppBlockRule, canEdit: Bool, onChange: @escaping (AppBlockRule) -> Void) {
         _rule = State(initialValue: rule)
+        self.canEdit = canEdit
         self.onChange = onChange
+        _lastGoodRule = State(initialValue: rule)
         _hasWindows = State(initialValue: !rule.unlockWindows.isEmpty)
         _hasBudget = State(initialValue: rule.budgetMinutes != nil)
         _hasCooldown = State(initialValue: rule.cooldownMinutes != nil)
@@ -75,6 +91,9 @@ struct AppRuleEditView: View {
 
     var body: some View {
         Form {
+            if let warning {
+                Section { Text(warning).font(.caption).foregroundColor(.red) }
+            }
             Section(footer: Text("Off: blocked all day, every day. On: only unlocked during times you set below.")) {
                 Toggle("Unlock at specific times", isOn: $hasWindows.animation())
                     .onChange(of: hasWindows) { on in
@@ -183,9 +202,34 @@ struct AppRuleEditView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    /// 2026-10-30, Kanyon: "you should be able to make any blocking more tight while
+    /// the block is active, but not less tight unless the partner unlocks it." Every
+    /// control above already mutates `rule` (and the matching has* flag) before
+    /// calling this — if the result loosens anything relative to lastGoodRule and
+    /// canEdit is false, it's reverted right back (UI snaps to where it was, with a
+    /// reason) instead of silently taking effect.
     private func commit() {
         rule.normalize()
+        if !canEdit && !appBlockRuleIsTighterOrEqual(from: lastGoodRule, to: rule) {
+            warning = "That loosens this app’s rule — ask your accountability partner for the usual 10 minutes first."
+            rule = lastGoodRule
+            syncTogglesToRule()
+            return
+        }
+        warning = nil
+        lastGoodRule = rule
         onChange(rule)
+    }
+
+    /// Keeps the four progressive-disclosure toggles in sync after commit() reverts
+    /// `rule` — otherwise a toggle could keep reading "on" with a value the struct no
+    /// longer actually has, the exact stale-flag bug already fixed once in this file
+    /// (see the "Unlock at specific times" toggle's own 2026-10-12 comment below).
+    private func syncTogglesToRule() {
+        hasWindows = !rule.unlockWindows.isEmpty
+        hasBudget = rule.budgetMinutes != nil
+        hasCooldown = rule.cooldownMinutes != nil
+        hasSessionLimit = rule.sessionLimitMinutes != nil
     }
 }
 

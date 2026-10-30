@@ -203,8 +203,18 @@ targets:
         # device-wide (no per-app API from Apple), gated the same asymmetric way as
         # everything else: free to turn on, needs partner approval + location to turn
         # off. No new entitlement, no new Info.plist key.
-        MARKETING_VERSION: "4.4.1"
-        CURRENT_PROJECT_VERSION: "26"
+        # 4.5.0 (27), 2026-10-30: blocking/app blocking rebuild in one batch — deletion
+        # block moved from App Blocking into the Blocking card; tighten-any-time/
+        # loosen-needs-partner now enforced natively for the picker (removing a blocked
+        # app) and per-app rules (AppBlockingRules.swift's appBlockRuleIsTighterOrEqual,
+        # AppRuleEditorView.swift's commit()); pickApps/editRules take a canEdit flag
+        # from the web page instead of being fully gated; accountability-partner
+        # acceptance step (partner-accept page) before they're live as an approver;
+        # unlock-condition AND/OR setting; change-log email to the partner in place of
+        # screen recording (not something any regular App Store app can do). No new
+        # entitlement, no new Info.plist key.
+        MARKETING_VERSION: "4.5.0"
+        CURRENT_PROJECT_VERSION: "27"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
@@ -276,8 +286,8 @@ targets:
         PRODUCT_NAME: "MtLogos Monitor"
         # Must match the main MtLogos target's version exactly — Apple validates an
         # embedded extension's version against its host app at upload time.
-        MARKETING_VERSION: "4.4.1"
-        CURRENT_PROJECT_VERSION: "26"
+        MARKETING_VERSION: "4.5.0"
+        CURRENT_PROJECT_VERSION: "27"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9

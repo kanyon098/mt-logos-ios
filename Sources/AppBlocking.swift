@@ -2,6 +2,16 @@ import DeviceActivity
 import FamilyControls
 import ManagedSettings
 import SwiftUI
+import WebKit   // only for AppDelegate.shared?.webView?.evaluateJavaScript in logChange() below
+
+/// Same escaping WebView.swift's own private jsStringLiteral() does — duplicated
+/// rather than shared across files, it's a one-line helper with no state.
+private func jsStringLiteral(_ s: String) -> String {
+    let escaped = s.replacingOccurrences(of: "\\", with: "\\\\")
+        .replacingOccurrences(of: "'", with: "\\'")
+        .replacingOccurrences(of: "\n", with: "\\n")
+    return "'\(escaped)'"
+}
 
 /* App-level blocking (2026-10-11) — separate from and unrelated to DnsFilter.swift.
    DNS stays the mechanism for adult-content website blocking (the list never leaves
@@ -171,27 +181,58 @@ final class AppBlocking {
             : .specific(selection.categoryTokens, except: [])
     }
 
+    /// Fire-and-forget: tells the web app's log (and, through it, the server) that a
+    /// loosening change just happened — see mtλapp.html's __blockLogChange and
+    /// worker/src/index.js's /api/blocking/log-change, which silently ignores this if
+    /// there's no currently-approved window to attach it to (the normal case for a
+    /// tightening change). Only ever called for the loosening direction, same
+    /// principle as every other call site of this in mtλapp.html.
+    private func logChange(_ action: String, _ detail: String) {
+        let js = "window.__blockLogChange && window.__blockLogChange(" + jsStringLiteral(action) + "," + jsStringLiteral(detail) + ")"
+        DispatchQueue.main.async { AppDelegate.shared?.webView?.evaluateJavaScript(js) }
+    }
+
     /// Requests authorization (if needed) and presents the real system app picker modally
     /// over whatever view controller is on screen. On Done, chains straight into the rule
     /// editor for whatever's now selected (newly-added apps start fully blocked, Kanyon's
     /// stated default, until a rule is actually set for them) — completion only fires once
     /// that whole flow (picker + rule editor) is dismissed. completion gets (ok, appCount, error).
-    func presentPicker(from vc: UIViewController, completion: @escaping (Bool, Int, String?) -> Void) {
+    ///
+    /// canEdit (2026-10-30): picking apps is always allowed — ADDING a new blocked app
+    /// is tightening, same "no condition needed to add more accountability" rule as
+    /// every binary toggle in this file. REMOVING an already-blocked app is the
+    /// loosening half; when canEdit is false, any token/category present in the OLD
+    /// selection but missing from what the picker returned is silently added back in
+    /// before saving, so the picker can never be used to quietly un-block something
+    /// without the partner gate mtλapp.html already checked before calling this.
+    func presentPicker(from vc: UIViewController, canEdit: Bool, completion: @escaping (Bool, Int, String?) -> Void) {
         Task { @MainActor in
             guard await ensureAuthorized() else {
                 completion(false, 0, "Screen Time permission was not granted.")
                 return
             }
+            let oldSelection = self.loadSelection()
             let picker = AppBlockPickerView(
-                initial: self.loadSelection(),
-                onDone: { [weak self] selection in
+                initial: oldSelection,
+                onDone: { [weak self] pickerResult in
                     guard let self else { return }
-                    self.saveSelection(selection)
-                    self.applyShield(selection)
-                    self.pruneRulesToSelection(selection)
+                    var finalSelection = pickerResult
+                    let removedApps = oldSelection.applicationTokens.subtracting(pickerResult.applicationTokens)
+                    let removedCats = oldSelection.categoryTokens.subtracting(pickerResult.categoryTokens)
+                    let blockedRemoval = !canEdit && (!removedApps.isEmpty || !removedCats.isEmpty)
+                    if blockedRemoval {
+                        finalSelection.applicationTokens = pickerResult.applicationTokens.union(removedApps)
+                        finalSelection.categoryTokens = pickerResult.categoryTokens.union(removedCats)
+                    }
+                    self.saveSelection(finalSelection)
+                    self.applyShield(finalSelection)
+                    self.pruneRulesToSelection(finalSelection)
+                    let allowedRemoval = canEdit && (!removedApps.isEmpty || !removedCats.isEmpty)
                     vc.dismiss(animated: true) {
-                        self.presentRuleEditor(from: vc) { _ in
-                            completion(true, selection.applicationTokens.count + selection.categoryTokens.count, nil)
+                        // Adding apps is tightening — never logged, see logChange's own comment.
+                        if allowedRemoval { self.logChange("apps_removed", "") }
+                        self.presentRuleEditor(from: vc, canEdit: canEdit) { _ in
+                            completion(true, finalSelection.applicationTokens.count + finalSelection.categoryTokens.count, nil)
                         }
                     }
                 },
@@ -210,14 +251,23 @@ final class AppBlocking {
     /// session limit, in that exact order — see AppBlockingRules.swift) for whatever apps
     /// are currently selected. Has to be native SwiftUI, not the web app: Label(token) is
     /// the only thing that can show a real name/icon for an opaque ApplicationToken, and
-    /// that capability doesn't exist outside Apple's own frameworks.
-    func presentRuleEditor(from vc: UIViewController, completion: @escaping (Bool) -> Void) {
+    /// that capability doesn't exist outside Apple's own frameworks. canEdit is passed
+    /// straight through to AppRuleEditView, which does the actual tighten/loosen
+    /// enforcement per edit (see its own commit()).
+    func presentRuleEditor(from vc: UIViewController, canEdit: Bool, completion: @escaping (Bool) -> Void) {
         let selection = loadSelection()
         guard !selection.applicationTokens.isEmpty else { completion(true); return }
         let editor = AppRuleListView(
             tokens: Array(selection.applicationTokens),
+            canEdit: canEdit,
             onSave: { [weak self] token, rule in
-                self?.applyRule(rule, for: token)
+                guard let self else { return }
+                let old = AppBlockingRulesStore.shared.rule(for: token)
+                self.applyRule(rule, for: token)
+                // AppRuleEditView already only lets a loosening edit through when
+                // canEdit is true (reverting it otherwise) — this just decides whether
+                // what DID land is worth telling the partner about.
+                if !appBlockRuleIsTighterOrEqual(from: old, to: rule) { self.logChange("rule_loosened", "") }
             },
             onDone: {
                 vc.dismiss(animated: true) { completion(true) }
