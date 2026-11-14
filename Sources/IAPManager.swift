@@ -2,29 +2,39 @@ import Foundation
 import StoreKit
 import WebKit
 
-/* Apple In-App Purchase — native base-plan subscriptions + Skopo's one-time unlock.
-   See worker/src/index.js's big "Apple In-App Purchase (StoreKit..." comment for the
-   full server-side design and trust model; this is the client half. Stripe and the
-   website stay completely untouched — this only ever runs inside the wrapped app,
-   and it never grants anything itself: a purchase here just starts the StoreKit
-   flow and finishes the local transaction. The actual paid_until/skopo_unlocked_at
-   grant happens server-side, once Apple's own servers process the purchase and
-   notify the webhook, which re-verifies directly with Apple rather than trusting
-   anything this client reports. See WebView.swift's "iap" message handler for the
-   JS bridge that lets the web page (the /pay screen) actually call this.
+/* Apple In-App Purchase — native base-plan subscriptions only. Skopo's one-time
+   unlock IAP (com.mtlogos.app.skopo) was removed from App Store Connect 2026-11-14
+   ("we took off the in app purchase for skopo and we just have annual and monthly
+   now for just standard version") — pulled out of MtLogosProduct entirely rather
+   than left in the requested set pointing at a product that no longer exists,
+   which is its own potential source of a StoreKit products-fail-to-load failure
+   independent of whatever App Store Connect account issue was also in play.
+   Server-side (worker/src/index.js) still has the Skopo-webhook code path and
+   APPLE_IAP_PRODUCT_ID_SKOPO wired up — left in place since it's now simply
+   unreachable (no such product exists to generate that webhook event anymore),
+   not actively broken, and removing it isn't needed to fix this rejection.
+
+   See worker/src/index.js's big "Apple In-App Purchase (StoreKit..." comment for
+   the full server-side design and trust model; this is the client half. Stripe and
+   the website stay completely untouched — this only ever runs inside the wrapped
+   app, and it never grants anything itself: a purchase here just starts the
+   StoreKit flow and finishes the local transaction. The actual paid_until grant
+   happens server-side, once Apple's own servers process the purchase and notify
+   the webhook, which re-verifies directly with Apple rather than trusting anything
+   this client reports. See WebView.swift's "iap" message handler for the JS bridge
+   that lets the web page (the /pay screen) actually call this.
 
    Product IDs are fixed constants, not server config — App Store Connect's Product
    ID field is set ONCE at creation and can never change afterward, so there is no
-   "configure it later" step the way IOS_APP_ID etc. have. These three strings ARE
-   the configuration: type them into App Store Connect EXACTLY as they appear here.
-   wrangler.toml keeps its own copy of the same three ids (APPLE_IAP_PRODUCT_ID_*)
-   for the server side to key its webhook routing on — kept in sync by hand, since
-   the server has no way to import a Swift file. */
+   "configure it later" step the way IOS_APP_ID etc. have. These strings ARE the
+   configuration: type them into App Store Connect EXACTLY as they appear here.
+   wrangler.toml keeps its own copy (APPLE_IAP_PRODUCT_ID_*) for the server side to
+   key its webhook routing on — kept in sync by hand, since the server has no way
+   to import a Swift file. */
 enum MtLogosProduct {
     static let monthly = "com.mtlogos.app.monthly"
     static let annual = "com.mtlogos.app.annual"
-    static let skopo = "com.mtlogos.app.skopo"
-    static let all: Set<String> = [monthly, annual, skopo]
+    static let all: Set<String> = [monthly, annual]
 }
 
 enum IAPError: Error {
@@ -62,11 +72,39 @@ final class IAPManager: NSObject, ObservableObject {
 
     deinit { updatesTask?.cancel() }
 
+    /// 2026-11-14, real Apple rejection: "the subscription failed to load" — hit
+    /// AGAIN the day after the web-side timeout/retry fix (see mtλapp.html's
+    /// iapRequestProducts() comment) already shipped for the exact same complaint.
+    /// That fix only covers the web page waiting too long for an ANSWER; it does
+    /// nothing if Product.products(for:) itself comes back empty or throws on the
+    /// very first call — which StoreKit can genuinely do on a cold launch, before
+    /// it's finished warming its own local catalog, a review device's first-ever
+    /// run being exactly that. One un-retried attempt with no visibility into why
+    /// it failed was a real gap independent of whatever App Store Connect account
+    /// issue (Paid Apps Agreement, products not attached to this version) may ALSO
+    /// be at play. Now retries up to 3 times with short backoff (0.8s, 1.6s) for
+    /// BOTH a thrown error and a successful-but-empty result, logging each
+    /// attempt's outcome so a future TestFlight/Console session has something to
+    /// look at instead of silence. Does not fix an account-level ASC problem if
+    /// that's the real cause — only StoreKit itself can tell us that by actually
+    /// returning the products once retried.
     func loadProducts() async {
-        do {
-            products = try await Product.products(for: MtLogosProduct.all)
-        } catch {
-            products = []
+        for attempt in 1...3 {
+            do {
+                let fetched = try await Product.products(for: MtLogosProduct.all)
+                print("IAPManager.loadProducts attempt \(attempt): got \(fetched.count) product(s)")
+                if !fetched.isEmpty || attempt == 3 {
+                    products = fetched
+                    return
+                }
+            } catch {
+                print("IAPManager.loadProducts attempt \(attempt) threw: \(error)")
+                if attempt == 3 {
+                    products = []
+                    return
+                }
+            }
+            try? await Task.sleep(nanoseconds: UInt64(attempt) * 800_000_000)
         }
     }
 
@@ -111,25 +149,24 @@ final class IAPManager: NSObject, ObservableObject {
     /// "Restore purchases" — re-syncs StoreKit's local transaction list from
     /// Apple (a reinstall, or a purchase made on another device signed into the
     /// same Apple ID), then looks at what's CURRENTLY entitled on this Apple ID
-    /// for our three known products. Returns the same (originalTransactionId,
+    /// for our two known base-plan products. Returns the same (originalTransactionId,
     /// productId) shape purchase() does, for the EXACT same reason: a restored
     /// transaction already carries whatever appAccountToken it was purchased
     /// with, so running it through the same /api/apple/confirm round-trip (see
     /// the "iap" bridge in WebView.swift) is what actually reconnects it to this
     /// account server-side — AppStore.sync() alone only affects this device's
     /// local StoreKit state, it never calls back to the Worker on its own.
-    /// Prefers an active base-plan subscription over Skopo if somehow both are
-    /// current, since the base plan is what actually gates the whole app.
+    /// No more Skopo-vs-base-plan preference to resolve now that Skopo's IAP is
+    /// gone (see MtLogosProduct's own comment) — just the first current
+    /// entitlement that matches one of our two real products.
     func restorePurchases() async -> (originalTransactionId: String, productId: String)? {
         try? await AppStore.sync()
-        var skopoFound: (String, String)? = nil
         for await entitlement in Transaction.currentEntitlements {
             guard case .verified(let transaction) = entitlement else { continue }
             guard MtLogosProduct.all.contains(transaction.productID) else { continue }
-            let found = (String(transaction.originalID), transaction.productID)
-            if transaction.productID == MtLogosProduct.skopo { skopoFound = found } else { return found }
+            return (String(transaction.originalID), transaction.productID)
         }
-        return skopoFound
+        return nil
     }
 
     /// StoreKit's OWN on-device signature check (Apple's framework verifying its
