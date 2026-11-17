@@ -348,7 +348,11 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                     AppDelegate.shared?.webView?.evaluateJavaScript("window.__appStoreBlockStatus && window.__appStoreBlockStatus(\(reportedState ? "true" : "false"))")
                 }
             case "appStoreStatus":
-                AppDelegate.shared?.webView?.evaluateJavaScript("window.__appStoreBlockStatus && window.__appStoreBlockStatus(\(AppBlocking.shared.isAppStoreBlocked() ? "true" : "false"))")
+                // 2026-11-17: own callback, split out of __appStoreBlockStatus for the
+                // same reason as every other status/action split today — toggleAppStore
+                // can await the real system Screen Time dialog, and this status read
+                // fires on every render.
+                AppDelegate.shared?.webView?.evaluateJavaScript("window.__appStoreStatusResult && window.__appStoreStatusResult(\(AppBlocking.shared.isAppStoreBlocked() ? "true" : "false"))")
             // Deletion blocking (2026-10-30) — see AppBlocking.swift's
             // setDeletionBlocked()/isDeletionBlocked(). Own callback, same reasoning as
             // tamperStatus/clearTamper just below: setDeletionBlocked can also await the
@@ -361,7 +365,8 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                     AppDelegate.shared?.webView?.evaluateJavaScript("window.__deletionBlockStatus && window.__deletionBlockStatus(\(reportedState ? "true" : "false"))")
                 }
             case "deletionBlockStatus":
-                AppDelegate.shared?.webView?.evaluateJavaScript("window.__deletionBlockStatus && window.__deletionBlockStatus(\(AppBlocking.shared.isDeletionBlocked() ? "true" : "false"))")
+                // 2026-11-17: own callback, same split as appStoreStatus above.
+                AppDelegate.shared?.webView?.evaluateJavaScript("window.__deletionBlockStatusResult && window.__deletionBlockStatusResult(\(AppBlocking.shared.isDeletionBlocked() ? "true" : "false"))")
             // Clock-tamper flag (2026-10-11) — see ClockIntegrityGuard. "clearTamper" is
             // how the person acknowledges they saw the note, same one-way ack pattern as
             // any other dismissible warning; it does NOT undo whatever triggered it.
@@ -416,8 +421,11 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                     UIApplication.shared.open(url)
                 }
             default:
+                // 2026-11-17: own callback, same split as every other status/action pair
+                // today — pickApps/editRules present a real, human-timescale system
+                // sheet, and this status read fires on every App Blocking tab render.
                 let (isActive, count) = AppBlocking.shared.status()
-                AppDelegate.shared?.webView?.evaluateJavaScript("window.__appBlockingStatus && window.__appBlockingStatus(\(isActive ? "true" : "false"), \(count))")
+                AppDelegate.shared?.webView?.evaluateJavaScript("window.__appBlockingStatusResult && window.__appBlockingStatusResult(\(isActive ? "true" : "false"), \(count))")
             }
             return
         }
