@@ -244,8 +244,18 @@ targets:
         # pulling a target changes what's in the .ipa, so this can't reuse 29's
         # already-attempted (version, build) pair even though that attempt
         # never got far enough to actually upload.
-        MARKETING_VERSION: "4.5.0"
-        CURRENT_PROJECT_VERSION: "30"
+        # 4.5.1 (31), 2026-11-17: real upload error, not a provisioning one —
+        # altool 90186/90062: "4.5.0 is closed for new build submissions,"
+        # "must contain a higher version than the previously approved version
+        # [4.5.0]." Build 28 (see the 4.5.0 (29) comment above, "28 is still
+        # the one actually in front of Apple review") got APPROVED on Apple's
+        # side at some point since, closing that whole train — bumping only
+        # CURRENT_PROJECT_VERSION (29->30) was never going to clear this, since
+        # the block is on MARKETING_VERSION itself, not the build number. Every
+        # Swift/web fix from builds 29/30 (none of which ever got far enough to
+        # upload) rides along in this one.
+        MARKETING_VERSION: "4.5.1"
+        CURRENT_PROJECT_VERSION: "31"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
