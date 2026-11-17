@@ -136,7 +136,14 @@ final class AppBlocking {
     /// permission dialog) if not already granted. Must happen before the picker can be
     /// shown — presenting FamilyActivityPicker without authorization just shows an empty,
     /// non-functional picker rather than erroring, so this is checked first on purpose.
-    private func ensureAuthorized() async -> Bool {
+    /// Not private any more (2026-11-16) — real report: a user who had only ever used
+    /// DNS content blocking (a separate mechanism, no Family Controls involved) had NEVER
+    /// been through this prompt at all, since it previously only fired lazily the first
+    /// time the app-picker opened, and never found Mt. Logos in iOS's own Settings ->
+    /// Screen Time -> "Apps With Screen Time Access" list as a result. Now also reachable
+    /// directly via its own "Connect to Screen Time" button (see WebView.swift's
+    /// "connectScreenTime" case), not just as a side effect of picking apps.
+    func ensureAuthorized() async -> Bool {
         let center = AuthorizationCenter.shared
         if center.authorizationStatus == .approved { return true }
         do {
@@ -145,6 +152,12 @@ final class AppBlocking {
         } catch {
             return false
         }
+    }
+
+    /// Read-only check, no prompt — lets the web page show "Connected"/"Not connected"
+    /// on load without ever side-effecting a permission dialog just from rendering a tab.
+    func isScreenTimeAuthorized() -> Bool {
+        AuthorizationCenter.shared.authorizationStatus == .approved
     }
 
     private func loadSelection() -> FamilyActivitySelection {
@@ -230,7 +243,10 @@ final class AppBlocking {
                     let allowedRemoval = canEdit && (!removedApps.isEmpty || !removedCats.isEmpty)
                     vc.dismiss(animated: true) {
                         // Adding apps is tightening — never logged, see logChange's own comment.
-                        if allowedRemoval { self.logChange("apps_removed", "") }
+                        if allowedRemoval {
+                            let n = removedApps.count + removedCats.count
+                            self.logChange("apps_removed", n == 1 ? "1 app/category" : "\(n) apps/categories")
+                        }
                         self.presentRuleEditor(from: vc, canEdit: canEdit) { _ in
                             completion(true, finalSelection.applicationTokens.count + finalSelection.categoryTokens.count, nil)
                         }
@@ -267,7 +283,15 @@ final class AppBlocking {
                 // AppRuleEditView already only lets a loosening edit through when
                 // canEdit is true (reverting it otherwise) — this just decides whether
                 // what DID land is worth telling the partner about.
-                if !appBlockRuleIsTighterOrEqual(from: old, to: rule) { self.logChange("rule_loosened", "") }
+                // 2026-11-16: detail now carries the real before/after numbers (e.g.
+                // "daily budget 60 to 90 min") instead of always being empty — the app's
+                // NAME still can never be included (ApplicationToken is Apple-opaque,
+                // no API anywhere resolves it back to "Instagram"), but the actual
+                // numbers changed are available right here and were simply never passed
+                // through before.
+                if !appBlockRuleIsTighterOrEqual(from: old, to: rule) {
+                    self.logChange("rule_loosened", describeRuleLoosening(from: old, to: rule))
+                }
             },
             onDone: {
                 vc.dismiss(animated: true) { completion(true) }

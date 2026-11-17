@@ -2,6 +2,7 @@ import SwiftUI
 import WebKit
 import AVFoundation
 import UserNotifications
+import UIKit   // UIApplication.openSettingsURLString / .shared.open (2026-11-16, "openSystemSettings")
 
 /* The whole app is one WKWebView pointed at mtlogos.com — see APP-STORE-CHECKLIST.md /
    the ship plan for why (subscriptions stay on the website, this is a free sign-in
@@ -254,13 +255,22 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             return
         }
         if message.name == "dnsFilter" {
-            // body is one of "enable" | "disable" | "status" — see dnsFilterEnable()/
-            // dnsFilterStatus() in mtλapp.html, which is what's waiting on the
-            // matching window.__dnsFilter* callback this posts back.
-            let command = (message.body as? String) ?? "status"
+            // body is "disable" | "status" (plain strings, unchanged), or for "enable"
+            // only, a JSON string {"cmd":"enable","token":"..."} — see dnsFilterToggle()
+            // in mtλapp.html, which is what's waiting on the matching window.__dnsFilter*
+            // callback this posts back. token (2026-11-09) is this account's own
+            // dns_tokens value — see DnsFilter.enable()'s own comment for why.
+            let rawBody = (message.body as? String) ?? "status"
+            var command = rawBody
+            var dnsToken: String? = nil
+            if rawBody.hasPrefix("{"), let data = rawBody.data(using: .utf8),
+               let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+                command = (obj["cmd"] as? String) ?? "status"
+                dnsToken = obj["token"] as? String
+            }
             switch command {
             case "enable":
-                DnsFilter.enable { ok, errorMessage in
+                DnsFilter.enable(token: dnsToken) { ok, errorMessage in
                     let arg = ok ? "true" : "false, " + jsStringLiteral(errorMessage ?? "Could not turn it on.")
                     AppDelegate.shared?.webView?.evaluateJavaScript("window.__dnsFilterResult && window.__dnsFilterResult(\(arg))")
                 }
@@ -359,6 +369,33 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             case "clearTamper":
                 AppBlocking.shared.clearClockTamperFlag()
                 AppDelegate.shared?.webView?.evaluateJavaScript("window.__appTamperStatus && window.__appTamperStatus(false)")
+            // Connect to Screen Time (2026-11-16) — real report: someone who'd only ever
+            // used DNS content blocking had never been through the Family Controls
+            // authorization prompt at all (it used to only fire as a side effect of
+            // opening the app-picker) and Mt. Logos never showed up in iOS's own
+            // Settings -> Screen Time -> "Apps With Screen Time Access" list because of
+            // it. Own explicit button/bridge call now, own status channel so it can never
+            // collide with toggleAppStore/appStoreStatus's __appStoreBlockStatus slot the
+            // same way tamperStatus/clearTamper already don't.
+            case "connectScreenTime":
+                Task {
+                    let ok = await AppBlocking.shared.ensureAuthorized()
+                    await MainActor.run {
+                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__screenTimeConnectStatus && window.__screenTimeConnectStatus(\(ok ? "true" : "false"))")
+                    }
+                }
+            case "screenTimeStatus":
+                AppDelegate.shared?.webView?.evaluateJavaScript("window.__screenTimeConnectStatus && window.__screenTimeConnectStatus(\(AppBlocking.shared.isScreenTimeAuthorized() ? "true" : "false"))")
+            // One tap closer to iOS's own Settings > Screen Time screen (2026-11-16) —
+            // there is no public, App-Review-safe URL scheme straight to the Screen Time
+            // page itself, only to this app's own Settings entry (UIApplication's
+            // documented openSettingsURLString). From there it's: Settings -> Screen Time
+            // -> that's one real tap closer than digging through Settings from the home
+            // screen, not a true one-tap deep link to the exact screen.
+            case "openSystemSettings":
+                if let url = URL(string: UIApplication.openSettingsURLString) {
+                    UIApplication.shared.open(url)
+                }
             default:
                 let (isActive, count) = AppBlocking.shared.status()
                 AppDelegate.shared?.webView?.evaluateJavaScript("window.__appBlockingStatus && window.__appBlockingStatus(\(isActive ? "true" : "false"), \(count))")

@@ -213,8 +213,30 @@ targets:
         # unlock-condition AND/OR setting; change-log email to the partner in place of
         # screen recording (not something any regular App Store app can do). No new
         # entitlement, no new Info.plist key.
+        # 4.5.0 (29), 2026-11-16: three real gaps closed in one batch, same 4.5.0 train
+        # (28 is still the one actually in front of Apple review as of this commit —
+        # bump to 29 only once ready to actually supersede it in the queue). (1) New
+        # ShieldConfig extension target — a real on-screen shield (black background,
+        # Mt. Logos logo) for a blocked app/category/web domain; previously iOS's own
+        # unbranded default shield was all anyone ever saw, regardless of anything
+        # AppBlocking.swift already enforced. (2) AppBlocking.ensureAuthorized() is no
+        # longer private and gets its own "connectScreenTime"/"screenTimeStatus" bridge
+        # cases (WebView.swift) — real report: someone who'd only ever used DNS content
+        # blocking (a wholly separate mechanism) had never been through the Family
+        # Controls prompt at all, since it previously only fired as a side effect of
+        # opening the app-picker, and Mt. Logos never showed up in iOS's own Settings ->
+        # Screen Time -> "Apps With Screen Time Access" list as a result. (3) New
+        # "openSystemSettings" bridge case (UIApplication.openSettingsURLString) — one
+        # tap closer to iOS's own Settings app; there's no public, App-Review-safe deep
+        # link straight to the Screen Time screen itself. (4) rule_loosened/apps_removed
+        # change-log entries now carry the real before/after numbers (describeRuleLoosening()
+        # in AppBlockingRules.swift) instead of always being empty strings — the app's
+        # NAME still can never be included, Apple-opaque ApplicationToken, no new
+        # entitlement needed for any of this batch beyond ShieldConfig's own
+        # family-controls declaration above, which it needs for the same reason
+        # MonitorExtension already does.
         MARKETING_VERSION: "4.5.0"
-        CURRENT_PROJECT_VERSION: "27"
+        CURRENT_PROJECT_VERSION: "29"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
@@ -239,6 +261,8 @@ targets:
         PROVISIONING_PROFILE_SPECIFIER: "Mt Logos App Store"
     dependencies:
       - target: MonitorExtension
+        embed: true
+      - target: ShieldConfig
         embed: true
 
   # Conditional app-blocking rules (2026-10-11) — Kanyon wants, per app: a default of
@@ -287,7 +311,7 @@ targets:
         # Must match the main MtLogos target's version exactly — Apple validates an
         # embedded extension's version against its host app at upload time.
         MARKETING_VERSION: "4.5.0"
-        CURRENT_PROJECT_VERSION: "27"
+        CURRENT_PROJECT_VERSION: "29"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9
@@ -298,3 +322,43 @@ targets:
         # creates/reuses the right one for this extension's own bundle id automatically,
         # same pattern as the main app's own profile.
         PROVISIONING_PROFILE_SPECIFIER: "Mt Logos Monitor Extension"
+
+  # Shield Configuration Extension (2026-11-16) — draws the actual on-screen shield
+  # (black background + Mt. Logos logo, see Sources/ShieldConfig/ShieldConfigurationExtension.swift)
+  # whenever a blocked app/category/web domain is opened. A UI-less "service" extension —
+  # Apple's ManagedSettingsUI framework calls it and renders the ShieldConfiguration it
+  # returns; this target has no app of its own to run.
+  ShieldConfig:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Sources/ShieldConfig
+      - path: Resources/ShieldAssets.xcassets
+    info:
+      path: Generated/ShieldConfig-Info.plist
+      properties:
+        CFBundleDisplayName: MtLogos Shield
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.ManagedSettingsUI.shield-configuration-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShieldConfigurationExtension
+    entitlements:
+      path: Generated/ShieldConfig.entitlements
+      properties:
+        com.apple.developer.family-controls: true
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mtlogos.app.shieldconfig
+        PRODUCT_NAME: "MtLogos Shield"
+        # Must match the main MtLogos target's version exactly, same rule as MonitorExtension.
+        MARKETING_VERSION: "4.5.0"
+        CURRENT_PROJECT_VERSION: "29"
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1"
+        DEVELOPMENT_TEAM: QKPAT27SX9
+        SKIP_INSTALL: true
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "Apple Distribution"
+        # Own distinct profile name, same -allowProvisioningUpdates auto-create/reuse
+        # pattern as the main app's and MonitorExtension's.
+        PROVISIONING_PROFILE_SPECIFIER: "Mt Logos Shield Extension"

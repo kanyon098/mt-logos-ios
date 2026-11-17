@@ -105,6 +105,38 @@ func appBlockRuleIsTighterOrEqual(from old: AppBlockRule, to new: AppBlockRule) 
     return true
 }
 
+/// Plain-English detail string for the partner's follow-up email (2026-11-16) — the
+/// app's NAME is never knowable (see this file's own header comment), but exactly which
+/// number changed and by how much always is, and was simply never surfaced before. Only
+/// called once the caller already knows this edit loosened something, so this only has
+/// to find and describe whichever tier(s) actually moved; never returns an empty string
+/// in that case since at least one of the checks below is guaranteed to fire.
+func describeRuleLoosening(from old: AppBlockRule, to new: AppBlockRule) -> String {
+    var parts: [String] = []
+    if old.unlockWindows.isEmpty && !new.unlockWindows.isEmpty {
+        parts.append("added an unlock window (was blocked all day)")
+    } else if !new.unlockWindows.allSatisfy({ windowContainedInUnion($0, old.unlockWindows) })
+        || windowsCoverMinutes(new.unlockWindows) > windowsCoverMinutes(old.unlockWindows) {
+        parts.append("widened the unlock window")
+    }
+    switch (old.budgetMinutes, new.budgetMinutes) {
+    case (.some(let o), nil): parts.append("removed the \(o)min daily limit")
+    case (.some(let o), .some(let n)) where n > o: parts.append("daily limit \(o) to \(n) min")
+    default: break
+    }
+    switch (old.cooldownMinutes, new.cooldownMinutes) {
+    case (.some(let o), nil): parts.append("removed the \(o)min cooldown")
+    case (.some(let o), .some(let n)) where n < o: parts.append("cooldown \(o) to \(n) min")
+    default: break
+    }
+    switch (old.sessionLimitMinutes, new.sessionLimitMinutes) {
+    case (.some(let o), nil): parts.append("removed the \(o)min session limit")
+    case (.some(let o), .some(let n)) where n > o: parts.append("session limit \(o) to \(n) min")
+    default: break
+    }
+    return parts.isEmpty ? "loosened a limit" : parts.joined(separator: "; ")
+}
+
 /// Keyed by ApplicationToken — Apple's own opaque, Codable, Hashable identifier for a
 /// selected app. Never resolvable back to a bundle id or readable name from app code
 /// (by Apple's design, see AppBlocking.swift's header comment); the native rule-editor
