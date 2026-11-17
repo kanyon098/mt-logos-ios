@@ -253,9 +253,15 @@ targets:
         # CURRENT_PROJECT_VERSION (29->30) was never going to clear this, since
         # the block is on MARKETING_VERSION itself, not the build number. Every
         # Swift/web fix from builds 29/30 (none of which ever got far enough to
-        # upload) rides along in this one.
-        MARKETING_VERSION: "4.5.1"
-        CURRENT_PROJECT_VERSION: "31"
+        # upload) rides along in this one. Submitted to Apple review same day —
+        # left untouched here; this version bump is separate, below.
+        # 4.5.2 (32), 2026-11-17: ShieldConfig re-added (see dependencies
+        # comment above) now that Apple's approved the Family Controls
+        # Distribution entitlement. Can't reuse 4.5.1 (31)'s pair — that one is
+        # already uploaded and sitting in Apple review with a DIFFERENT binary
+        # (no Shield extension); this is a genuinely different .ipa.
+        MARKETING_VERSION: "4.5.2"
+        CURRENT_PROJECT_VERSION: "32"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
@@ -281,24 +287,19 @@ targets:
     dependencies:
       - target: MonitorExtension
         embed: true
-      # ShieldConfig temporarily pulled (2026-11-17) — every CI build fails at
-      # "Export .ipa" with "requires a provisioning profile with the Family
-      # Controls (Development) feature." Real cause, confirmed via Apple's own
-      # developer forums: a NEW bundle id's Family Controls capability needs a
-      # SEPARATE, manually-requested "Family Controls (Distribution)"
-      # entitlement approval from Apple (https://developer.apple.com/contact/request/family-controls-distribution),
-      # reported to take anywhere from weeks to months — not something
-      # -allowProvisioningUpdates or any CI change can route around. Rather
-      # than block every other native fix (e.g. the same-day Connect Screen
-      # Time race fix) behind an approval with no predictable timeline, this
-      # target is defined below but not embedded, so it's simply left out of
-      # the archive. The black-screen-with-logo shield itself is untouched —
-      # re-add this one line once Apple approves the entitlement for
-      # com.mtlogos.app.shieldconfig (check Apple Developer -> Identifiers ->
-      # that bundle id -> Additional Capabilities for "Family Controls
-      # (Distribution)").
-      # - target: ShieldConfig
-      #   embed: true
+      # ShieldConfig re-added (2026-11-17) — Apple approved the Family Controls
+      # (Distribution) entitlement request (submitted earlier today, Request ID
+      # 838MQBB8HZ) within minutes, far faster than the weeks-to-months other
+      # developers reported. Was pulled from the build for a few hours (see git
+      # history on this line) purely because "Export .ipa" failed without this
+      # entitlement — same black-screen-with-logo shield code, untouched the
+      # whole time. If the provisioning profile ("Mt Logos Shield Extension")
+      # was created BEFORE this approval landed, -allowProvisioningUpdates may
+      # not pick up the newly-available capability automatically; the fallback,
+      # same as the original setup, is regenerating that profile by hand once in
+      # Apple Developer Portal.
+      - target: ShieldConfig
+        embed: true
 
   # Conditional app-blocking rules (2026-10-11) — Kanyon wants, per app: a default of
   # fully blocked, then progressively deeper opt-in tiers (unlock windows -> daily/
@@ -344,9 +345,12 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.mtlogos.app.monitor
         PRODUCT_NAME: "MtLogos Monitor"
         # Must match the main MtLogos target's version exactly — Apple validates an
-        # embedded extension's version against its host app at upload time.
-        MARKETING_VERSION: "4.5.0"
-        CURRENT_PROJECT_VERSION: "30"
+        # embedded extension's version against its host app at upload time. This
+        # had drifted to 4.5.0 (30) while the main target moved through 4.5.1
+        # (31) — caught 2026-11-17 while re-adding ShieldConfig, before it could
+        # cause its own upload failure.
+        MARKETING_VERSION: "4.5.2"
+        CURRENT_PROJECT_VERSION: "32"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9
@@ -386,8 +390,10 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.mtlogos.app.shieldconfig
         PRODUCT_NAME: "MtLogos Shield"
         # Must match the main MtLogos target's version exactly, same rule as MonitorExtension.
-        MARKETING_VERSION: "4.5.0"
-        CURRENT_PROJECT_VERSION: "29"
+        # Had drifted to 4.5.0 (29) from when this target was first added, never
+        # bumped while it sat unembedded — caught 2026-11-17 re-adding it.
+        MARKETING_VERSION: "4.5.2"
+        CURRENT_PROJECT_VERSION: "32"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9
