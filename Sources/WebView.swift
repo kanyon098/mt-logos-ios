@@ -260,6 +260,14 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             // in mtλapp.html, which is what's waiting on the matching window.__dnsFilter*
             // callback this posts back. token (2026-11-09) is this account's own
             // dns_tokens value — see DnsFilter.enable()'s own comment for why.
+            // 2026-11-17 real bug, caught live: "status" used to call back through
+            // __dnsFilterStatus, which shared one JS resolve slot with __dnsFilterResult
+            // (enable/disable) — renderBlockingSettings() checks status on every render,
+            // including every 3s from a pending-state poll, and both this and enable/
+            // disable are genuinely async here (NEDNSSettingsManager isn't instant), so
+            // a status check firing while an enable/disable call is still in flight
+            // silently orphaned it — "would not turn on content blocking" live. status
+            // now calls its own window.__dnsFilterStatusResult instead.
             let rawBody = (message.body as? String) ?? "status"
             var command = rawBody
             var dnsToken: String? = nil
@@ -281,7 +289,7 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                 }
             default:
                 DnsFilter.isEnabled { on in
-                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__dnsFilterStatus && window.__dnsFilterStatus(\(on ? "true" : "false"))")
+                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__dnsFilterStatusResult && window.__dnsFilterStatusResult(\(on ? "true" : "false"))")
                 }
             }
             return
