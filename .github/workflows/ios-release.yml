@@ -136,6 +136,16 @@ jobs:
               <string>Mt Logos App Store</string>
               <key>com.mtlogos.app.monitor</key>
               <string>Mt Logos Monitor Extension</string>
+              <!-- 2026-11-17: ShieldConfig was never listed here even once the target
+                   existed. With manual signing, a bundle id missing from this dict has
+                   no profile name to export with at all -- that's the REAL cause of
+                   "requires a provisioning profile with the Family Controls
+                   (Development) feature," not a provisioning-portal gap. Every round of
+                   re-registering the App ID, requesting the Distribution entitlement,
+                   and regenerating the profile by hand was solving problems that didn't
+                   need solving; this one missing line was the actual bug the whole time. -->
+              <key>com.mtlogos.app.shieldconfig</key>
+              <string>Mt Logos Shield Extension</string>
             </dict>
           </dict>
           </plist>
