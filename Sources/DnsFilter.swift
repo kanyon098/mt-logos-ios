@@ -43,9 +43,26 @@ final class DnsFilter {
     /// device's DNS through mtlogos.com/dns-query. DoH (DNS-over-HTTPS) — the same
     /// transport the server route already speaks — rather than DoT, since it's a plain
     /// HTTPS POST and needs no extra port/protocol allowances.
-    static func enable(completion: @escaping (Bool, String?) -> Void) {
+    ///
+    /// `token` (2026-11-09) — this account's own dns_tokens value, fetched by the web
+    /// page (GET /api/dns-token) and passed down through WebView.swift's "dnsFilter"
+    /// bridge. Baked right into the resolver URL itself, exactly the way a real
+    /// DNS-filter app would scope a shared resolver to one subscriber — it's what lets
+    /// /dns-query tell this phone's queries apart from everyone else's, so a person's
+    /// own added sites (see user_block_domains in worker/src/index.js) only ever block
+    /// for THEM, never globally. Optional and backward compatible on purpose: nil just
+    /// means "global list only," the exact behavior this had before the per-user list
+    /// existed, so a failed token fetch never blocks turning protection on at all.
+    static func enable(token: String?, completion: @escaping (Bool, String?) -> Void) {
         let settings = NEDNSOverHTTPSSettings(servers: [])
-        settings.serverURL = URL(string: "https://mtlogos.com/dns-query")
+        let base = "https://mtlogos.com/dns-query"
+        let urlString: String
+        if let token, !token.isEmpty {
+            urlString = base + "/" + token
+        } else {
+            urlString = base
+        }
+        settings.serverURL = URL(string: urlString)
         let manager = NEDNSSettingsManager.shared()
         manager.dnsSettings = settings
         manager.saveToPreferences { error in

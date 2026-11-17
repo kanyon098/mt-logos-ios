@@ -26,7 +26,19 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
                       didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         AppDelegate.shared = self
         UNUserNotificationCenter.current().delegate = self
+        application.applicationIconBadgeNumber = 0
         return true
+    }
+
+    // The server side of this (bumpBadgeCount / pending_badge_count reset in
+    // worker/src/index.js) only decides what NUMBER the next push should show —
+    // it can't touch what's already sitting on the Home Screen icon, since
+    // iOS badges are sticky client-side until something local clears them.
+    // This is that local clear: fires on every return to the app, not just a
+    // cold launch, so reopening from the background after a pile of
+    // notifications also zeroes it, same as Kanyon described.
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        application.applicationIconBadgeNumber = 0
     }
 
     // requestApnsToken() in mtλapp.html is waiting on exactly one of these two
