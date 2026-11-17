@@ -374,9 +374,20 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             // authorization prompt at all (it used to only fire as a side effect of
             // opening the app-picker) and Mt. Logos never showed up in iOS's own
             // Settings -> Screen Time -> "Apps With Screen Time Access" list because of
-            // it. Own explicit button/bridge call now, own status channel so it can never
-            // collide with toggleAppStore/appStoreStatus's __appStoreBlockStatus slot the
-            // same way tamperStatus/clearTamper already don't.
+            // it. Own explicit button/bridge call now.
+            // 2026-11-17 real bug, caught from a live screenshot: this case and
+            // "screenTimeStatus" below used to both call back through
+            // __screenTimeConnectStatus, on the mistaken belief that made them "own
+            // channel" the same way tamperStatus/clearTamper already don't collide.
+            // They don't share a Swift-side resolve slot, but the JS side DOES share
+            // one callback/promise for both -- and the status check fires
+            // automatically the instant the Layers tab renders, while Connect is
+            // tappable immediately, before that status round-trip returns. Tapping it
+            // quickly overwrites the status check's pending JS promise, permanently
+            // orphaning it -- the UI got stuck on "Checking…"/"Opening the system
+            // permission prompt…" forever. screenTimeStatus now calls its own
+            // __screenTimeStatusResult instead, matching the real separate-channel
+            // pattern every other pair here already uses.
             case "connectScreenTime":
                 Task {
                     let ok = await AppBlocking.shared.ensureAuthorized()
@@ -385,7 +396,7 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                     }
                 }
             case "screenTimeStatus":
-                AppDelegate.shared?.webView?.evaluateJavaScript("window.__screenTimeConnectStatus && window.__screenTimeConnectStatus(\(AppBlocking.shared.isScreenTimeAuthorized() ? "true" : "false"))")
+                AppDelegate.shared?.webView?.evaluateJavaScript("window.__screenTimeStatusResult && window.__screenTimeStatusResult(\(AppBlocking.shared.isScreenTimeAuthorized() ? "true" : "false"))")
             // One tap closer to iOS's own Settings > Screen Time screen (2026-11-16) —
             // there is no public, App-Review-safe URL scheme straight to the Screen Time
             // page itself, only to this app's own Settings entry (UIApplication's

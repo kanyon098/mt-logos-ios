@@ -235,8 +235,17 @@ targets:
         # entitlement needed for any of this batch beyond ShieldConfig's own
         # family-controls declaration above, which it needs for the same reason
         # MonitorExtension already does.
+        # 4.5.0 (30), 2026-11-17: ShieldConfig pulled from this build (see the
+        # dependencies comment above) so the DnsFilter.swift token fix, the
+        # Push.swift badge-clear fix, and today's Connect Screen Time race fix
+        # (WebView.swift/mtλapp.html) can actually ship while Apple's Family
+        # Controls Distribution approval for com.mtlogos.app.shieldconfig is
+        # pending. No Swift change in this bump beyond what 29 already had;
+        # pulling a target changes what's in the .ipa, so this can't reuse 29's
+        # already-attempted (version, build) pair even though that attempt
+        # never got far enough to actually upload.
         MARKETING_VERSION: "4.5.0"
-        CURRENT_PROJECT_VERSION: "29"
+        CURRENT_PROJECT_VERSION: "30"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
@@ -262,8 +271,24 @@ targets:
     dependencies:
       - target: MonitorExtension
         embed: true
-      - target: ShieldConfig
-        embed: true
+      # ShieldConfig temporarily pulled (2026-11-17) — every CI build fails at
+      # "Export .ipa" with "requires a provisioning profile with the Family
+      # Controls (Development) feature." Real cause, confirmed via Apple's own
+      # developer forums: a NEW bundle id's Family Controls capability needs a
+      # SEPARATE, manually-requested "Family Controls (Distribution)"
+      # entitlement approval from Apple (https://developer.apple.com/contact/request/family-controls-distribution),
+      # reported to take anywhere from weeks to months — not something
+      # -allowProvisioningUpdates or any CI change can route around. Rather
+      # than block every other native fix (e.g. the same-day Connect Screen
+      # Time race fix) behind an approval with no predictable timeline, this
+      # target is defined below but not embedded, so it's simply left out of
+      # the archive. The black-screen-with-logo shield itself is untouched —
+      # re-add this one line once Apple approves the entitlement for
+      # com.mtlogos.app.shieldconfig (check Apple Developer -> Identifiers ->
+      # that bundle id -> Additional Capabilities for "Family Controls
+      # (Distribution)").
+      # - target: ShieldConfig
+      #   embed: true
 
   # Conditional app-blocking rules (2026-10-11) — Kanyon wants, per app: a default of
   # fully blocked, then progressively deeper opt-in tiers (unlock windows -> daily/
@@ -311,7 +336,7 @@ targets:
         # Must match the main MtLogos target's version exactly — Apple validates an
         # embedded extension's version against its host app at upload time.
         MARKETING_VERSION: "4.5.0"
-        CURRENT_PROJECT_VERSION: "29"
+        CURRENT_PROJECT_VERSION: "30"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9
