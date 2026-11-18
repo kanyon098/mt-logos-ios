@@ -423,10 +423,18 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             // one in-flight request (see AppBlocking.swift), but that coalescing itself
             // needs serialized access to be reliable, so this matches every other call
             // site instead of being the odd one out.
+            // 2026-11-18, real CI failure caught right after the @MainActor change above:
+            // "expression is 'async' but is not marked with 'await'" / "call can throw, but
+            // it is not marked with 'try'" at this exact evaluateJavaScript call. Same root
+            // cause as the IAP bridge's own 2026-07-ish fix (see those call sites' _ = try?
+            // await pattern below) -- inside an async context, evaluateJavaScript(_:)
+            // resolves to the newer `async throws -> Any?` overload, not the old
+            // completion-handler one every non-async call site here still gets by default.
+            // Matches that established pattern instead of being the one holdout.
             case "connectScreenTime":
                 Task { @MainActor in
                     let ok = await AppBlocking.shared.ensureAuthorized()
-                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__screenTimeConnectStatus && window.__screenTimeConnectStatus(\(ok ? "true" : "false"))")
+                    _ = try? await AppDelegate.shared?.webView?.evaluateJavaScript("window.__screenTimeConnectStatus && window.__screenTimeConnectStatus(\(ok ? "true" : "false"))")
                 }
             case "screenTimeStatus":
                 AppDelegate.shared?.webView?.evaluateJavaScript("window.__screenTimeStatusResult && window.__screenTimeStatusResult(\(AppBlocking.shared.isScreenTimeAuthorized() ? "true" : "false"))")
