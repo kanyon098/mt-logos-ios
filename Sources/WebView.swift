@@ -35,9 +35,22 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
         "mtlogos.com", "www.mtlogos.com", "skopoapp.com", "www.skopoapp.com"
     ]
 
-    static let userAgent =
-        "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 " +
-        "(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1 MtLogosApp/1"
+    /// 2026-11-18, real request: "I like the build time but there's no way to tell
+    /// which update I'm using" — the Settings footer already shows the WEB build
+    /// stamp, but that's a different thing from which NATIVE build is installed, and
+    /// there was no way to read that from in-app at all. The "MtLogosApp/1" marker
+    /// here was already how mtλapp.html's isMtLogosApp() detects it's running inside
+    /// the app (regex just checks for "MtLogosApp/", not what follows) — swapped the
+    /// hardcoded "1" for the real marketing version + build number from Info.plist,
+    /// so the web side can read it straight off navigator.userAgent with no new
+    /// bridge call needed. See mtλapp.html's nativeAppVersion().
+    static let userAgent: String = {
+        let info = Bundle.main.infoDictionary
+        let version = info?["CFBundleShortVersionString"] as? String ?? "0"
+        let build = info?["CFBundleVersion"] as? String ?? "0"
+        return "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 " +
+            "(KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1 MtLogosApp/\(version)-\(build)"
+    }()
 
     override init() {
         /* 2026-10-12, real bug Kanyon reported live: "the bar code scanner is not
