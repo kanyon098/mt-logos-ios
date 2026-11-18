@@ -143,15 +143,33 @@ final class AppBlocking {
     /// Screen Time -> "Apps With Screen Time Access" list as a result. Now also reachable
     /// directly via its own "Connect to Screen Time" button (see WebView.swift's
     /// "connectScreenTime" case), not just as a side effect of picking apps.
+    ///
+    /// 2026-11-18, real report: "it wasn't connecting or bringing up the popup... just
+    /// inconsistent." This method is called from presentPicker()/the location flow/the
+    /// Connect button, and nothing stopped two of those from calling it at the same
+    /// moment (e.g. a second tap on the switch before the first round-trip finished).
+    /// AuthorizationCenter's requestAuthorization has no documented behavior for being
+    /// called twice while one call is already presenting its system sheet — a real,
+    /// plausible way for the SECOND call to silently fail with no UI at all, which reads
+    /// exactly like "didn't bring up the popup." Coalesce concurrent callers onto one
+    /// in-flight Task instead of letting the framework see two simultaneous requests.
+    private var authInFlight: Task<Bool, Never>?
     func ensureAuthorized() async -> Bool {
         let center = AuthorizationCenter.shared
         if center.authorizationStatus == .approved { return true }
-        do {
-            try await center.requestAuthorization(for: .individual)
-            return center.authorizationStatus == .approved
-        } catch {
-            return false
+        if let inFlight = authInFlight { return await inFlight.value }
+        let task = Task<Bool, Never> {
+            do {
+                try await center.requestAuthorization(for: .individual)
+                return center.authorizationStatus == .approved
+            } catch {
+                return false
+            }
         }
+        authInFlight = task
+        let result = await task.value
+        authInFlight = nil
+        return result
     }
 
     /// Read-only check, no prompt — lets the web page show "Connected"/"Not connected"

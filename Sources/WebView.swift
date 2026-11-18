@@ -401,12 +401,19 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
             // permission prompt…" forever. screenTimeStatus now calls its own
             // __screenTimeStatusResult instead, matching the real separate-channel
             // pattern every other pair here already uses.
+            // 2026-11-18, real report: "it wasn't connecting or bringing up the popup...
+            // just inconsistent." Every OTHER caller of ensureAuthorized() in this
+            // codebase (setAppStoreBlocked, setDeletionBlocked, presentPicker, all in
+            // AppBlocking.swift) already wraps it in `Task { @MainActor in ... }` — this
+            // was the one plain `Task { ... }`, which runs on a background executor, not
+            // the main actor. ensureAuthorized() now coalesces concurrent callers onto
+            // one in-flight request (see AppBlocking.swift), but that coalescing itself
+            // needs serialized access to be reliable, so this matches every other call
+            // site instead of being the odd one out.
             case "connectScreenTime":
-                Task {
+                Task { @MainActor in
                     let ok = await AppBlocking.shared.ensureAuthorized()
-                    await MainActor.run {
-                        AppDelegate.shared?.webView?.evaluateJavaScript("window.__screenTimeConnectStatus && window.__screenTimeConnectStatus(\(ok ? "true" : "false"))")
-                    }
+                    AppDelegate.shared?.webView?.evaluateJavaScript("window.__screenTimeConnectStatus && window.__screenTimeConnectStatus(\(ok ? "true" : "false"))")
                 }
             case "screenTimeStatus":
                 AppDelegate.shared?.webView?.evaluateJavaScript("window.__screenTimeStatusResult && window.__screenTimeStatusResult(\(AppBlocking.shared.isScreenTimeAuthorized() ? "true" : "false"))")
