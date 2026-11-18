@@ -260,8 +260,13 @@ targets:
         # Distribution entitlement. Can't reuse 4.5.1 (31)'s pair — that one is
         # already uploaded and sitting in Apple review with a DIFFERENT binary
         # (no Shield extension); this is a genuinely different .ipa.
+        # Build 33, 2026-11-18: same 4.5.2 binary intent as build 32, but with two
+        # real fixes that landed AFTER 32 already uploaded (the Screen Time connect
+        # double-tap race, and the iPhone-version-in-Settings feature) -- can't reuse
+        # 32's pair, that exact number is already sitting on Apple's servers from a
+        # successful upload (see 4.5.2 (32)'s own comment above).
         MARKETING_VERSION: "4.5.2"
-        CURRENT_PROJECT_VERSION: "32"
+        CURRENT_PROJECT_VERSION: "33"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
@@ -349,8 +354,13 @@ targets:
         # had drifted to 4.5.0 (30) while the main target moved through 4.5.1
         # (31) — caught 2026-11-17 while re-adding ShieldConfig, before it could
         # cause its own upload failure.
+        # Build 33, 2026-11-18: same 4.5.2 binary intent as build 32, but with two
+        # real fixes that landed AFTER 32 already uploaded (the Screen Time connect
+        # double-tap race, and the iPhone-version-in-Settings feature) -- can't reuse
+        # 32's pair, that exact number is already sitting on Apple's servers from a
+        # successful upload (see 4.5.2 (32)'s own comment above).
         MARKETING_VERSION: "4.5.2"
-        CURRENT_PROJECT_VERSION: "32"
+        CURRENT_PROJECT_VERSION: "33"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9
@@ -392,8 +402,13 @@ targets:
         # Must match the main MtLogos target's version exactly, same rule as MonitorExtension.
         # Had drifted to 4.5.0 (29) from when this target was first added, never
         # bumped while it sat unembedded — caught 2026-11-17 re-adding it.
+        # Build 33, 2026-11-18: same 4.5.2 binary intent as build 32, but with two
+        # real fixes that landed AFTER 32 already uploaded (the Screen Time connect
+        # double-tap race, and the iPhone-version-in-Settings feature) -- can't reuse
+        # 32's pair, that exact number is already sitting on Apple's servers from a
+        # successful upload (see 4.5.2 (32)'s own comment above).
         MARKETING_VERSION: "4.5.2"
-        CURRENT_PROJECT_VERSION: "32"
+        CURRENT_PROJECT_VERSION: "33"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9
