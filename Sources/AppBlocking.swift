@@ -154,10 +154,29 @@ final class AppBlocking {
     /// exactly like "didn't bring up the popup." Coalesce concurrent callers onto one
     /// in-flight Task instead of letting the framework see two simultaneous requests.
     private var authInFlight: Task<Bool, Never>?
+    /// 2026-11-19, real report: a friend's real system Screen Time prompt kept
+    /// reappearing "relentlessly" with no tap involved -- the actual loop turned
+    /// out to be a web-side re-render polling the status check every 3 seconds
+    /// (fixed in mtλapp.html's renderLayersSettings), but that bug living on the
+    /// OTHER side of the bridge is exactly the kind of thing this side shouldn't
+    /// have to trust never happens again. A flat cooldown between real
+    /// AuthorizationCenter prompts is a hard backstop against ANY caller (a bug
+    /// here, a bug on the web side, a future one neither side has thought of
+    /// yet) ever looping this into a real system dialog faster than a human
+    /// could plausibly be re-tapping the actual button. Short enough that a
+    /// real "tap Connect, got denied, try again a few seconds later" still
+    /// works; long enough that nothing resembling a loop ever reaches
+    /// requestAuthorization a second time.
+    private var lastAuthPromptAt: Date?
+    private let authPromptCooldown: TimeInterval = 5
     func ensureAuthorized() async -> Bool {
         let center = AuthorizationCenter.shared
         if center.authorizationStatus == .approved { return true }
         if let inFlight = authInFlight { return await inFlight.value }
+        if let last = lastAuthPromptAt, Date().timeIntervalSince(last) < authPromptCooldown {
+            return false
+        }
+        lastAuthPromptAt = Date()
         let task = Task<Bool, Never> {
             do {
                 try await center.requestAuthorization(for: .individual)
