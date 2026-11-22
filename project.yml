@@ -265,8 +265,12 @@ targets:
         # double-tap race, and the iPhone-version-in-Settings feature) -- can't reuse
         # 32's pair, that exact number is already sitting on Apple's servers from a
         # successful upload (see 4.5.2 (32)'s own comment above).
+        # Build 34, 2026-11-22: real fix for "Block adult content" refusing to turn
+        # on with a live "configuration is unchanged" system error -- shipping
+        # immediately rather than batched, since it's something already reported
+        # broken on a real device, not a routine Swift change.
         MARKETING_VERSION: "4.5.2"
-        CURRENT_PROJECT_VERSION: "33"
+        CURRENT_PROJECT_VERSION: "34"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
@@ -359,8 +363,12 @@ targets:
         # double-tap race, and the iPhone-version-in-Settings feature) -- can't reuse
         # 32's pair, that exact number is already sitting on Apple's servers from a
         # successful upload (see 4.5.2 (32)'s own comment above).
+        # Build 34, 2026-11-22: real fix for "Block adult content" refusing to turn
+        # on with a live "configuration is unchanged" system error -- shipping
+        # immediately rather than batched, since it's something already reported
+        # broken on a real device, not a routine Swift change.
         MARKETING_VERSION: "4.5.2"
-        CURRENT_PROJECT_VERSION: "33"
+        CURRENT_PROJECT_VERSION: "34"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9
@@ -407,8 +415,12 @@ targets:
         # double-tap race, and the iPhone-version-in-Settings feature) -- can't reuse
         # 32's pair, that exact number is already sitting on Apple's servers from a
         # successful upload (see 4.5.2 (32)'s own comment above).
+        # Build 34, 2026-11-22: real fix for "Block adult content" refusing to turn
+        # on with a live "configuration is unchanged" system error -- shipping
+        # immediately rather than batched, since it's something already reported
+        # broken on a real device, not a routine Swift change.
         MARKETING_VERSION: "4.5.2"
-        CURRENT_PROJECT_VERSION: "33"
+        CURRENT_PROJECT_VERSION: "34"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9

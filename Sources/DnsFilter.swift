@@ -53,24 +53,37 @@ final class DnsFilter {
     /// for THEM, never globally. Optional and backward compatible on purpose: nil just
     /// means "global list only," the exact behavior this had before the per-user list
     /// existed, so a failed token fetch never blocks turning protection on at all.
+    /// 2026-11-22, REAL BUG, reported live: "Block adult content" showed a real
+    /// system error, "configuration is unchanged," and refused to turn on.
+    /// Root cause: this called saveToPreferences on a `NEDNSSettingsManager`
+    /// that had never loaded the device's current preferences first. This is
+    /// a well-known NEDNSSettingsManager gotcha, not specific to this app —
+    /// the manager has no baseline to diff the new settings against until
+    /// loadFromPreferences has run at least once, so a save can be refused as
+    /// a no-op ("unchanged") even when nothing was ever actually turned on.
+    /// Fix: always loadFromPreferences first, build and assign the new
+    /// settings inside that completion, then save — same pattern
+    /// isEnabled() above already uses correctly.
     static func enable(token: String?, completion: @escaping (Bool, String?) -> Void) {
-        let settings = NEDNSOverHTTPSSettings(servers: [])
-        let base = "https://mtlogos.com/dns-query"
-        let urlString: String
-        if let token, !token.isEmpty {
-            urlString = base + "/" + token
-        } else {
-            urlString = base
-        }
-        settings.serverURL = URL(string: urlString)
         let manager = NEDNSSettingsManager.shared()
-        manager.dnsSettings = settings
-        manager.saveToPreferences { error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    completion(false, error.localizedDescription)
-                } else {
-                    completion(true, nil)
+        manager.loadFromPreferences { _ in
+            let settings = NEDNSOverHTTPSSettings(servers: [])
+            let base = "https://mtlogos.com/dns-query"
+            let urlString: String
+            if let token, !token.isEmpty {
+                urlString = base + "/" + token
+            } else {
+                urlString = base
+            }
+            settings.serverURL = URL(string: urlString)
+            manager.dnsSettings = settings
+            manager.saveToPreferences { error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        completion(false, error.localizedDescription)
+                    } else {
+                        completion(true, nil)
+                    }
                 }
             }
         }
@@ -85,12 +98,19 @@ final class DnsFilter {
     /// failure to a bare false, which is why the page could only ever show a generic
     /// "Something went wrong." with no way to tell what actually happened on the device.
     static func disable(completion: @escaping (Bool, String?) -> Void) {
-        NEDNSSettingsManager.shared().removeFromPreferences { error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    completion(false, error.localizedDescription)
-                } else {
-                    completion(true, nil)
+        // Same loadFromPreferences-first discipline as enable() above, applied
+        // here too even though removeFromPreferences hasn't been reported
+        // broken — it's the correct way to use this manager either direction,
+        // and there's no reason to leave the same class of bug half-fixed.
+        let manager = NEDNSSettingsManager.shared()
+        manager.loadFromPreferences { _ in
+            manager.removeFromPreferences { error in
+                DispatchQueue.main.async {
+                    if let error = error {
+                        completion(false, error.localizedDescription)
+                    } else {
+                        completion(true, nil)
+                    }
                 }
             }
         }
