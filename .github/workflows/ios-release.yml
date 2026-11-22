@@ -171,15 +171,34 @@ jobs:
             exit "$STATUS"
           fi
 
+      # 2026-11-22: this step had none of the ::error:: diagnostic capture
+      # Archive/Export above already use -- a failure here only ever showed
+      # as a bare "Process completed with exit code 1" with no admin rights
+      # on this repo to pull the raw run log and see why. Same tee+grep+
+      # ::error:: pattern as those two steps, so the next failure (if any)
+      # is actually diagnosable from the annotations list alone.
       - name: Upload to TestFlight
         env:
           APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
           APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
+          set +e
           IPA=$(find "$RUNNER_TEMP/export" -name '*.ipa' | head -n1)
           xcrun altool --upload-app -f "$IPA" -t ios \
-            --apiKey "$APPSTORE_API_KEY_ID" --apiIssuer "$APPSTORE_API_ISSUER_ID"
+            --apiKey "$APPSTORE_API_KEY_ID" --apiIssuer "$APPSTORE_API_ISSUER_ID" \
+            2>&1 | tee "$RUNNER_TEMP/upload.log"
+          STATUS=${PIPESTATUS[0]}
+          if [ "$STATUS" -ne 0 ]; then
+            echo "::group::Full upload log"
+            cat "$RUNNER_TEMP/upload.log"
+            echo "::endgroup::"
+            grep -E "error|Error|ERROR|fail(ed|ure)|rejected|invalid|duplicate" "$RUNNER_TEMP/upload.log" \
+              | sort -u | while IFS= read -r line; do
+                echo "::error::$line"
+              done
+            exit "$STATUS"
+          fi
 
       - name: Upload build artifacts (for debugging a failed run)
         if: always()
@@ -188,5 +207,6 @@ jobs:
           name: ios-build-output
           path: |
             ${{ runner.temp }}/export
+            ${{ runner.temp }}/upload.log
           retention-days: 5
           if-no-files-found: ignore
