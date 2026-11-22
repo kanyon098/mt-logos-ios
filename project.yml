@@ -269,7 +269,12 @@ targets:
         # on with a live "configuration is unchanged" system error -- shipping
         # immediately rather than batched, since it's something already reported
         # broken on a real device, not a routine Swift change.
-        MARKETING_VERSION: "4.5.2"
+        # Marketing version bumped to 4.5.3 in the same commit: the altool upload
+        # itself failed with a real Apple error -- 4.5.2 was already an APPROVED
+        # version on the App Store, and Apple refuses any new build whose
+        # CFBundleShortVersionString isn't strictly higher than the last approved
+        # one, regardless of build number. Not a batching call, a hard requirement.
+        MARKETING_VERSION: "4.5.3"
         CURRENT_PROJECT_VERSION: "34"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
@@ -367,7 +372,12 @@ targets:
         # on with a live "configuration is unchanged" system error -- shipping
         # immediately rather than batched, since it's something already reported
         # broken on a real device, not a routine Swift change.
-        MARKETING_VERSION: "4.5.2"
+        # Marketing version bumped to 4.5.3 in the same commit: the altool upload
+        # itself failed with a real Apple error -- 4.5.2 was already an APPROVED
+        # version on the App Store, and Apple refuses any new build whose
+        # CFBundleShortVersionString isn't strictly higher than the last approved
+        # one, regardless of build number. Not a batching call, a hard requirement.
+        MARKETING_VERSION: "4.5.3"
         CURRENT_PROJECT_VERSION: "34"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
@@ -419,7 +429,12 @@ targets:
         # on with a live "configuration is unchanged" system error -- shipping
         # immediately rather than batched, since it's something already reported
         # broken on a real device, not a routine Swift change.
-        MARKETING_VERSION: "4.5.2"
+        # Marketing version bumped to 4.5.3 in the same commit: the altool upload
+        # itself failed with a real Apple error -- 4.5.2 was already an APPROVED
+        # version on the App Store, and Apple refuses any new build whose
+        # CFBundleShortVersionString isn't strictly higher than the last approved
+        # one, regardless of build number. Not a batching call, a hard requirement.
+        MARKETING_VERSION: "4.5.3"
         CURRENT_PROJECT_VERSION: "34"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
