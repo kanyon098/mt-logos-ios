@@ -77,8 +77,22 @@ final class AppBlocking {
         }
     }
 
+    /// 2026-11-23, real report: "I don't think that feature is working right
+    /// now" (about deletion-block, see isDeletionBlocked() below — same real
+    /// gap exists here too). This used to just trust the local flag forever.
+    /// If the person revokes Family Controls authorization in iOS Settings
+    /// (a path Apple always exposes, same honest limit as everywhere else in
+    /// this file), ManagedSettingsStore stops actually enforcing anything,
+    /// but this kept reporting "Protected" regardless. Same real fix as
+    /// DnsFilter.isEnabled()'s 2026-10-12 bug: stop trusting intent, check
+    /// what's actually still true.
     func isAppStoreBlocked() -> Bool {
-        UserDefaults.standard.bool(forKey: appStoreBlockedKey)
+        let flagged = UserDefaults.standard.bool(forKey: appStoreBlockedKey)
+        if flagged && !isScreenTimeAuthorized() {
+            UserDefaults.standard.set(false, forKey: appStoreBlockedKey)
+            return false
+        }
+        return flagged
     }
 
     /// Re-applies on every launch, same reasoning as reapplySavedShield() below — a
@@ -123,8 +137,28 @@ final class AppBlocking {
         }
     }
 
+    /// 2026-11-23, REAL BUG, reported live: "Can you confirm that the app
+    /// actually blocks uninstalling apps. i dont think that feature is
+    /// working rn." Checked Apple's own developer forums first rather than
+    /// guessing: denyAppRemoval under INDIVIDUAL (personal-device, non-MDM)
+    /// Family Controls authorization is explicitly NOT guaranteed by Apple to
+    /// prevent deletion once that authorization is revoked -- and the person
+    /// can revoke it anytime in iOS Settings, a path this app has no way to
+    /// block (same honest limit as DnsFilter.disable()'s own comment). This
+    /// function only ever trusted the local flag it set, so it kept
+    /// reporting "Protected" even after a revoked authorization had already
+    /// silently stopped the real protection -- same bug class as
+    /// DnsFilter.isEnabled()'s 2026-10-12 fix. Re-checking the real
+    /// authorization here can't make denyAppRemoval itself more reliable
+    /// (that ceiling is Apple's, not this app's), but it stops this toggle
+    /// from lying about whether it's actually still in effect.
     func isDeletionBlocked() -> Bool {
-        UserDefaults.standard.bool(forKey: deletionBlockedKey)
+        let flagged = UserDefaults.standard.bool(forKey: deletionBlockedKey)
+        if flagged && !isScreenTimeAuthorized() {
+            UserDefaults.standard.set(false, forKey: deletionBlockedKey)
+            return false
+        }
+        return flagged
     }
 
     /// Re-applies on every launch, same reasoning as reapplyAppStoreBlock() above.

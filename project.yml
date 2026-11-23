@@ -274,8 +274,16 @@ targets:
         # version on the App Store, and Apple refuses any new build whose
         # CFBundleShortVersionString isn't strictly higher than the last approved
         # one, regardless of build number. Not a batching call, a hard requirement.
+        # Build 35, 2026-11-23: batching two more real-reported fixes (the
+        # partner-accept email link opening plain home instead of the right
+        # page, and deletion-block/App-Store-block reporting "Protected" after
+        # the underlying authorization had already been revoked) -- 34 itself
+        # is currently "Waiting for Review" on App Store Connect; this upload
+        # does not touch that submission, it just makes 35 available as a
+        # build Kanyon can swap in if he wants these fixes in the reviewed
+        # version instead of waiting for 34 to clear first.
         MARKETING_VERSION: "4.5.3"
-        CURRENT_PROJECT_VERSION: "34"
+        CURRENT_PROJECT_VERSION: "35"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
@@ -377,8 +385,16 @@ targets:
         # version on the App Store, and Apple refuses any new build whose
         # CFBundleShortVersionString isn't strictly higher than the last approved
         # one, regardless of build number. Not a batching call, a hard requirement.
+        # Build 35, 2026-11-23: batching two more real-reported fixes (the
+        # partner-accept email link opening plain home instead of the right
+        # page, and deletion-block/App-Store-block reporting "Protected" after
+        # the underlying authorization had already been revoked) -- 34 itself
+        # is currently "Waiting for Review" on App Store Connect; this upload
+        # does not touch that submission, it just makes 35 available as a
+        # build Kanyon can swap in if he wants these fixes in the reviewed
+        # version instead of waiting for 34 to clear first.
         MARKETING_VERSION: "4.5.3"
-        CURRENT_PROJECT_VERSION: "34"
+        CURRENT_PROJECT_VERSION: "35"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9
@@ -434,8 +450,16 @@ targets:
         # version on the App Store, and Apple refuses any new build whose
         # CFBundleShortVersionString isn't strictly higher than the last approved
         # one, regardless of build number. Not a batching call, a hard requirement.
+        # Build 35, 2026-11-23: batching two more real-reported fixes (the
+        # partner-accept email link opening plain home instead of the right
+        # page, and deletion-block/App-Store-block reporting "Protected" after
+        # the underlying authorization had already been revoked) -- 34 itself
+        # is currently "Waiting for Review" on App Store Connect; this upload
+        # does not touch that submission, it just makes 35 available as a
+        # build Kanyon can swap in if he wants these fixes in the reviewed
+        # version instead of waiting for 34 to clear first.
         MARKETING_VERSION: "4.5.3"
-        CURRENT_PROJECT_VERSION: "34"
+        CURRENT_PROJECT_VERSION: "35"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9

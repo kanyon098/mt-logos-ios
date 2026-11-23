@@ -651,7 +651,24 @@ struct ContentView: View {
             // fires — see Push.swift. Cheap to set on every appear; it's just a
             // weak reference, never re-creates anything.
             AppDelegate.shared?.webView = store.webView
-            if store.webView.url == nil { store.load() }
+            // 2026-11-22, REAL BUG, reported live: "the link sent on the email
+            // brought my friend to the app. It should bring them to the
+            // accountability partner link" — someone who already had Mt. Logos
+            // installed tapped a mtlogos.com/partner-accept/<token> email link,
+            // iOS handed it to the app via Universal Links (correct), but they
+            // landed on the ordinary home screen instead of the partner-accept
+            // page. Root cause: on a COLD launch triggered by that same tap,
+            // onAppear and onOpenURL both fire close together with no ordering
+            // guarantee between them — this `if url == nil { store.load() }`
+            // could run BEFORE onOpenURL's openUniversalLink() got the real
+            // URL, loading plain home first and then racing it. Deferred by one
+            // run-loop tick (DispatchQueue.main.async) so onOpenURL — which SwiftUI
+            // dispatches as part of the very same launch — gets a chance to set
+            // webView.url first; by the time this actually runs, a real
+            // universal link has already won and `url == nil` is false.
+            DispatchQueue.main.async {
+                if store.webView.url == nil { store.load() }
+            }
         }
         // Universal Links land here — see WebViewStore.openUniversalLink's own comment
         // and project.yml's associated-domains entitlement for the full picture.
