@@ -282,8 +282,14 @@ targets:
         # does not touch that submission, it just makes 35 available as a
         # build Kanyon can swap in if he wants these fixes in the reviewed
         # version instead of waiting for 34 to clear first.
+        # 36 (2026-11-23): real report, "the toggle won't stay on and keeps
+        # giving red error" on Change time settings -- ClockIntegrityGuard's
+        # Dismiss only cleared the tampered flag, never its own stale wall/
+        # uptime baseline, so the next check re-flagged immediately. Same
+        # "available to swap in" situation as 35 -- doesn't touch 34's pending
+        # review on its own.
         MARKETING_VERSION: "4.5.3"
-        CURRENT_PROJECT_VERSION: "35"
+        CURRENT_PROJECT_VERSION: "36"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
@@ -393,8 +399,14 @@ targets:
         # does not touch that submission, it just makes 35 available as a
         # build Kanyon can swap in if he wants these fixes in the reviewed
         # version instead of waiting for 34 to clear first.
+        # 36 (2026-11-23): real report, "the toggle won't stay on and keeps
+        # giving red error" on Change time settings -- ClockIntegrityGuard's
+        # Dismiss only cleared the tampered flag, never its own stale wall/
+        # uptime baseline, so the next check re-flagged immediately. Same
+        # "available to swap in" situation as 35 -- doesn't touch 34's pending
+        # review on its own.
         MARKETING_VERSION: "4.5.3"
-        CURRENT_PROJECT_VERSION: "35"
+        CURRENT_PROJECT_VERSION: "36"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9
@@ -458,8 +470,14 @@ targets:
         # does not touch that submission, it just makes 35 available as a
         # build Kanyon can swap in if he wants these fixes in the reviewed
         # version instead of waiting for 34 to clear first.
+        # 36 (2026-11-23): real report, "the toggle won't stay on and keeps
+        # giving red error" on Change time settings -- ClockIntegrityGuard's
+        # Dismiss only cleared the tampered flag, never its own stale wall/
+        # uptime baseline, so the next check re-flagged immediately. Same
+        # "available to swap in" situation as 35 -- doesn't touch 34's pending
+        # review on its own.
         MARKETING_VERSION: "4.5.3"
-        CURRENT_PROJECT_VERSION: "35"
+        CURRENT_PROJECT_VERSION: "36"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9

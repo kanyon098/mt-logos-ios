@@ -323,7 +323,18 @@ struct ClockIntegrityGuard {
         defaults?.bool(forKey: tamperedKey) ?? false
     }
 
+    /// 2026-11-23, real report: "the toggle won't stay on and keeps giving red error" —
+    /// dismissing used to only clear tamperedKey, never the wall/uptime baseline that
+    /// caused the flag in the first place. The very next checkAndRecord() call (from
+    /// either the app or the extension, often seconds later) re-compared against that
+    /// SAME stale baseline, got the SAME drift, and re-flagged tampered immediately —
+    /// dismiss could never actually stick. A dismiss is the person saying "that reading
+    /// was wrong, start over" — so it now also re-stamps wallKey/uptimeKey to right now,
+    /// the same reset checkAndRecord() itself does on every real check, so the NEXT
+    /// check measures fresh elapsed time instead of re-litigating the same old gap.
     static func clearTamperFlag() {
         defaults?.set(false, forKey: tamperedKey)
+        defaults?.set(Date().timeIntervalSince1970, forKey: wallKey)
+        defaults?.set(ProcessInfo.processInfo.systemUptime, forKey: uptimeKey)
     }
 }
