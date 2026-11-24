@@ -285,11 +285,14 @@ targets:
         # 36 (2026-11-23): real report, "the toggle won't stay on and keeps
         # giving red error" on Change time settings -- ClockIntegrityGuard's
         # Dismiss only cleared the tampered flag, never its own stale wall/
-        # uptime baseline, so the next check re-flagged immediately. Same
-        # "available to swap in" situation as 35 -- doesn't touch 34's pending
-        # review on its own.
-        MARKETING_VERSION: "4.5.3"
-        CURRENT_PROJECT_VERSION: "36"
+        # uptime baseline, so the next check re-flagged immediately.
+        # 37 (2026-11-23): 4.5.3/34 was approved and is live -- Kanyon created
+        # a real 4.5.4 version on App Store Connect for the next release, and
+        # Apple only lets a build attach to a version when the two match
+        # exactly, so 36's fix is rebuilt here under 4.5.4 so it can actually
+        # be picked for it.
+        MARKETING_VERSION: "4.5.4"
+        CURRENT_PROJECT_VERSION: "37"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
@@ -402,11 +405,14 @@ targets:
         # 36 (2026-11-23): real report, "the toggle won't stay on and keeps
         # giving red error" on Change time settings -- ClockIntegrityGuard's
         # Dismiss only cleared the tampered flag, never its own stale wall/
-        # uptime baseline, so the next check re-flagged immediately. Same
-        # "available to swap in" situation as 35 -- doesn't touch 34's pending
-        # review on its own.
-        MARKETING_VERSION: "4.5.3"
-        CURRENT_PROJECT_VERSION: "36"
+        # uptime baseline, so the next check re-flagged immediately.
+        # 37 (2026-11-23): 4.5.3/34 was approved and is live -- Kanyon created
+        # a real 4.5.4 version on App Store Connect for the next release, and
+        # Apple only lets a build attach to a version when the two match
+        # exactly, so 36's fix is rebuilt here under 4.5.4 so it can actually
+        # be picked for it.
+        MARKETING_VERSION: "4.5.4"
+        CURRENT_PROJECT_VERSION: "37"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9
@@ -473,11 +479,14 @@ targets:
         # 36 (2026-11-23): real report, "the toggle won't stay on and keeps
         # giving red error" on Change time settings -- ClockIntegrityGuard's
         # Dismiss only cleared the tampered flag, never its own stale wall/
-        # uptime baseline, so the next check re-flagged immediately. Same
-        # "available to swap in" situation as 35 -- doesn't touch 34's pending
-        # review on its own.
-        MARKETING_VERSION: "4.5.3"
-        CURRENT_PROJECT_VERSION: "36"
+        # uptime baseline, so the next check re-flagged immediately.
+        # 37 (2026-11-23): 4.5.3/34 was approved and is live -- Kanyon created
+        # a real 4.5.4 version on App Store Connect for the next release, and
+        # Apple only lets a build attach to a version when the two match
+        # exactly, so 36's fix is rebuilt here under 4.5.4 so it can actually
+        # be picked for it.
+        MARKETING_VERSION: "4.5.4"
+        CURRENT_PROJECT_VERSION: "37"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9
