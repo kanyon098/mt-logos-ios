@@ -552,8 +552,12 @@ final class WebViewStore: NSObject, ObservableObject, WKNavigationDelegate, WKUI
                 let labelArg = result.nearestLabel == nil ? "null" : jsStringLiteral(result.nearestLabel!)
                 let milesArg = result.nearestMiles == nil ? "null" : String(result.nearestMiles!)
                 let errArg = result.error == nil ? "null" : jsStringLiteral(result.error!)
+                // 2026-11-24: per-place distances as a JSON string (ids and miles only). Older web pages
+                // ignore the extra argument; the current page parses it (see __blockLocationResult).
+                let distJSON = "[" + result.distances.map { "{\"id\":\($0.id),\"miles\":\($0.miles)}" }.joined(separator: ",") + "]"
+                let distArg = jsStringLiteral(distJSON)
                 _ = try? await AppDelegate.shared?.webView?.evaluateJavaScript(
-                    "window.__blockLocationResult && window.__blockLocationResult(\(result.atLocation ? "true" : "false"), \(labelArg), \(milesArg), \(errArg))")
+                    "window.__blockLocationResult && window.__blockLocationResult(\(result.atLocation ? "true" : "false"), \(labelArg), \(milesArg), \(errArg), \(distArg))")
             }
             return
         }

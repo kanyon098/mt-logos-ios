@@ -258,8 +258,27 @@ final class AppBlocking {
     func clockTamperDetected() -> Bool { ClockIntegrityGuard.wasTamperedRecently() }
     func clearClockTamperFlag() { ClockIntegrityGuard.clearTamperFlag() }
 
+    /* 2026-11-24, Kanyon: picking an app now ONLY ADDS it. A newly picked app sits in the
+       "pending" set (below) with no shield until he taps Save (or turns on Full block) in the
+       rule editor. Pending apps are skipped here, both right after the picker and at every launch,
+       so nothing is restricted before he has confirmed the settings. Apps picked before this
+       update are never pending, so existing blocks are untouched. */
+    private let pendingKey = "mtlogos.appBlockingPendingTokens"
+    func loadPending() -> Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: pendingKey) ?? [])
+    }
+    private func savePending(_ s: Set<String>) {
+        UserDefaults.standard.set(Array(s), forKey: pendingKey)
+    }
+    func isPending(_ token: ApplicationToken) -> Bool { loadPending().contains(tokenB64(token)) }
+    private func confirmPending(_ token: ApplicationToken) {
+        var p = loadPending(); p.remove(tokenB64(token)); savePending(p)
+    }
+
     private func applyShield(_ selection: FamilyActivitySelection) {
-        store.shield.applications = selection.applicationTokens.isEmpty ? nil : selection.applicationTokens
+        let pending = loadPending()
+        let shielded = selection.applicationTokens.filter { !pending.contains(tokenB64($0)) }
+        store.shield.applications = shielded.isEmpty ? nil : shielded
         store.shield.applicationCategories = selection.categoryTokens.isEmpty
             ? nil
             : .specific(selection.categoryTokens, except: [])
@@ -301,13 +320,25 @@ final class AppBlocking {
                 onDone: { [weak self] pickerResult in
                     guard let self else { return }
                     var finalSelection = pickerResult
-                    let removedApps = oldSelection.applicationTokens.subtracting(pickerResult.applicationTokens)
+                    // Pending (not yet blocked) apps can be dropped freely: removing something that was
+                    // never blocked is not a loosening, so only really-blocked apps count here.
+                    let pendingBefore = self.loadPending()
+                    let removedApps = oldSelection.applicationTokens
+                        .subtracting(pickerResult.applicationTokens)
+                        .filter { !pendingBefore.contains(self.tokenB64($0)) }
+                    // Newly picked apps are ADDED only: pending, no shield until confirmed in the editor.
+                    let newlyAdded = pickerResult.applicationTokens.subtracting(oldSelection.applicationTokens)
+                    var pendingNow = pendingBefore.union(newlyAdded.map { self.tokenB64($0) })
                     let removedCats = oldSelection.categoryTokens.subtracting(pickerResult.categoryTokens)
                     let blockedRemoval = !canEdit && (!removedApps.isEmpty || !removedCats.isEmpty)
                     if blockedRemoval {
                         finalSelection.applicationTokens = pickerResult.applicationTokens.union(removedApps)
                         finalSelection.categoryTokens = pickerResult.categoryTokens.union(removedCats)
                     }
+                    // Forget pending marks for apps that are no longer selected at all.
+                    let keptB64 = Set(finalSelection.applicationTokens.map { self.tokenB64($0) })
+                    pendingNow = pendingNow.intersection(keptB64)
+                    self.savePending(pendingNow)
                     self.saveSelection(finalSelection)
                     self.applyShield(finalSelection)
                     self.pruneRulesToSelection(finalSelection)
@@ -347,6 +378,13 @@ final class AppBlocking {
         let editor = AppRuleListView(
             tokens: Array(selection.applicationTokens),
             canEdit: canEdit,
+            pendingTokens: Set(selection.applicationTokens.filter { isPending($0) }),
+            onConfirm: { [weak self] token, rule in
+                // Save / Full block tapped on a newly added app: NOW it gets its rule and shield.
+                guard let self else { return }
+                self.applyRule(rule, for: token)
+                self.confirmPending(token)
+            },
             onSave: { [weak self] token, rule in
                 guard let self else { return }
                 let old = AppBlockingRulesStore.shared.rule(for: token)
@@ -450,6 +488,7 @@ final class AppBlocking {
         store.shield.applications = nil
         store.shield.applicationCategories = nil
         UserDefaults.standard.removeObject(forKey: defaultsKey)
+        UserDefaults.standard.removeObject(forKey: pendingKey)
         completion(true)
     }
 

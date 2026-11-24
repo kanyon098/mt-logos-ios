@@ -15,9 +15,14 @@ struct AppRuleListView: View {
     /// reverts (and warns about) an edit that would loosen the rule below what it
     /// already was. See appBlockRuleIsTighterOrEqual() in AppBlockingRules.swift.
     let canEdit: Bool
+    /// 2026-11-24: apps that were just added and are NOT blocked yet. They show "Not blocked yet" and
+    /// only get a rule (and a shield) when Save or Full block is confirmed in their editor.
+    let pendingTokens: Set<ApplicationToken>
+    let onConfirm: (ApplicationToken, AppBlockRule) -> Void
     let onSave: (ApplicationToken, AppBlockRule) -> Void
     let onDone: () -> Void
     @State private var rules: [ApplicationToken: AppBlockRule] = AppBlockingRulesStore.shared.loadAll()
+    @State private var stillPending: Set<ApplicationToken> = []
 
     var body: some View {
         NavigationView {
@@ -25,6 +30,12 @@ struct AppRuleListView: View {
                 NavigationLink(destination: AppRuleEditView(
                     rule: rules[token] ?? AppBlockRule(),
                     canEdit: canEdit,
+                    isPending: stillPending.contains(token),
+                    onConfirm: { confirmed in
+                        rules[token] = confirmed
+                        stillPending.remove(token)
+                        onConfirm(token, confirmed)
+                    },
                     onChange: { newRule in
                         rules[token] = newRule
                         onSave(token, newRule)
@@ -33,12 +44,13 @@ struct AppRuleListView: View {
                     HStack {
                         Label(token)
                         Spacer()
-                        Text(summary(for: rules[token] ?? AppBlockRule()))
+                        Text(summary(for: rules[token] ?? AppBlockRule(), token: token))
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
             }
+            .onAppear { if stillPending.isEmpty { stillPending = pendingTokens } }
             .navigationTitle("Blocking rules")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -49,7 +61,8 @@ struct AppRuleListView: View {
         }
     }
 
-    private func summary(for rule: AppBlockRule) -> String {
+    private func summary(for rule: AppBlockRule, token: ApplicationToken? = nil) -> String {
+        if let token, stillPending.contains(token) { return "Not blocked yet" }
         if rule.isFullyBlocked { return "Blocked" }
         if rule.sessionLimitMinutes != nil { return "Scheduled, limited" }
         if rule.cooldownMinutes != nil { return "Scheduled, cooldown" }
@@ -65,7 +78,12 @@ struct AppRuleListView: View {
 struct AppRuleEditView: View {
     @State var rule: AppBlockRule
     let canEdit: Bool
+    /// True for an app that was just added and is not blocked yet. In that mode nothing is applied
+    /// while he edits (commit() does not call onChange); Save / Full block calls onConfirm once.
+    let onConfirm: (AppBlockRule) -> Void
     let onChange: (AppBlockRule) -> Void
+    @State private var isPending: Bool
+    @State private var fullBlock: Bool = false
 
     /// The last rule that was actually either tighter-or-equal, or explicitly allowed
     /// because canEdit was true at the time — what an invalid (loosening, !canEdit)
@@ -78,9 +96,11 @@ struct AppRuleEditView: View {
     @State private var hasCooldown: Bool
     @State private var hasSessionLimit: Bool
 
-    init(rule: AppBlockRule, canEdit: Bool, onChange: @escaping (AppBlockRule) -> Void) {
+    init(rule: AppBlockRule, canEdit: Bool, isPending: Bool = false, onConfirm: @escaping (AppBlockRule) -> Void = { _ in }, onChange: @escaping (AppBlockRule) -> Void) {
         _rule = State(initialValue: rule)
         self.canEdit = canEdit
+        _isPending = State(initialValue: isPending)
+        self.onConfirm = onConfirm
         self.onChange = onChange
         _lastGoodRule = State(initialValue: rule)
         _hasWindows = State(initialValue: !rule.unlockWindows.isEmpty)
@@ -94,10 +114,29 @@ struct AppRuleEditView: View {
             if let warning {
                 Section { Text(warning).font(.caption).foregroundColor(.red) }
             }
+            if isPending {
+                Section(footer: Text("Not blocked yet. Turn on Full block, or set times and limits below, then tap Save. Nothing is restricted until you do.")) {
+                    Toggle("Full block", isOn: $fullBlock.animation())
+                        .onChange(of: fullBlock) { on in
+                            if on {
+                                rule = AppBlockRule()
+                                hasWindows = false; hasBudget = false; hasCooldown = false; hasSessionLimit = false
+                            }
+                        }
+                    Button("Save") {
+                        rule.normalize()
+                        onConfirm(rule)
+                        lastGoodRule = rule
+                        isPending = false
+                    }
+                    .disabled(!(fullBlock || hasWindows))
+                }
+            }
             Section(footer: Text("Off: blocked all day, every day. On: only unlocked during times you set below.")) {
                 Toggle("Unlock at specific times", isOn: $hasWindows.animation())
                     .onChange(of: hasWindows) { on in
                         if on, rule.unlockWindows.isEmpty { rule.unlockWindows = [TimeWindow(startMinute: 8*60, endMinute: 20*60)] }
+                        if on { fullBlock = false }
                         /* 2026-10-12, real bug found in a fresh audit pass: turning a
                            tier off only ever reset the NEXT @State flag, never
                            anything deeper — rule.normalize() (called via commit()
@@ -210,6 +249,8 @@ struct AppRuleEditView: View {
     /// reason) instead of silently taking effect.
     private func commit() {
         rule.normalize()
+        // Newly added app: a brand-new app has nothing to loosen, and nothing is applied until Save.
+        if isPending { warning = nil; return }
         if !canEdit && !appBlockRuleIsTighterOrEqual(from: lastGoodRule, to: rule) {
             warning = "That loosens this app’s rule — ask your accountability partner for the usual 10 minutes first."
             rule = lastGoodRule

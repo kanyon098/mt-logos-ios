@@ -291,8 +291,9 @@ targets:
         # Apple only lets a build attach to a version when the two match
         # exactly, so 36's fix is rebuilt here under 4.5.4 so it can actually
         # be picked for it.
+        # 38 (2026-11-24): add-app order (new apps are Not blocked yet until Save), per-place distances.
         MARKETING_VERSION: "4.5.4"
-        CURRENT_PROJECT_VERSION: "37"
+        CURRENT_PROJECT_VERSION: "38"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
@@ -411,8 +412,9 @@ targets:
         # Apple only lets a build attach to a version when the two match
         # exactly, so 36's fix is rebuilt here under 4.5.4 so it can actually
         # be picked for it.
+        # 38 (2026-11-24): add-app order (new apps are Not blocked yet until Save), per-place distances.
         MARKETING_VERSION: "4.5.4"
-        CURRENT_PROJECT_VERSION: "37"
+        CURRENT_PROJECT_VERSION: "38"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9
@@ -485,8 +487,9 @@ targets:
         # Apple only lets a build attach to a version when the two match
         # exactly, so 36's fix is rebuilt here under 4.5.4 so it can actually
         # be picked for it.
+        # 38 (2026-11-24): add-app order (new apps are Not blocked yet until Save), per-place distances.
         MARKETING_VERSION: "4.5.4"
-        CURRENT_PROJECT_VERSION: "37"
+        CURRENT_PROJECT_VERSION: "38"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9

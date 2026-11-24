@@ -1,0 +1,44 @@
+﻿name: iOS compile check (no signing, no upload)
+
+# Added 2026-11-24. Runs ONLY on branches other than main, so it never touches the TestFlight
+# pipeline (ios-release.yml runs on main). It generates the Xcode project and builds the app
+# and its extensions with code signing turned OFF, purely to prove the Swift compiles before
+# anything is merged to main. No secrets are used.
+on:
+  push:
+    branches-ignore: [main]
+  workflow_dispatch: {}
+
+jobs:
+  compile:
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Select latest available Xcode
+        run: |
+          LATEST=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -n1)
+          sudo xcode-select -s "$LATEST/Contents/Developer"
+          xcodebuild -version
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate Xcode project from project.yml
+        run: xcodegen generate
+      - name: Build (no signing)
+        run: |
+          set -uo pipefail
+          set +e
+          xcodebuild build \
+            -project MtLogos.xcodeproj \
+            -scheme MtLogos \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            2>&1 | tee "$RUNNER_TEMP/build.log"
+          STATUS=${PIPESTATUS[0]}
+          if [ "$STATUS" -ne 0 ]; then
+            grep -E "error:" "$RUNNER_TEMP/build.log" | sort -u | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            exit "$STATUS"
+          fi

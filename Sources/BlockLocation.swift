@@ -41,7 +41,12 @@ final class BlockLocation: NSObject, CLLocationManagerDelegate {
         let nearestLabel: String?
         let nearestMiles: Double?
         let error: String?
+        /// 2026-11-24, Kanyon: miles from the phone to the CENTRE of every saved place, so the web page
+        /// can show "1.4 mi to go" / "You are here" on each approved place card. Only ids and miles
+        /// cross the bridge, never coordinates. Empty on any error.
+        var distances: [PlaceDistance] = []
     }
+    struct PlaceDistance { let id: Int; let miles: Double }
 
     func check() async -> CheckResult {
         guard await ensureAuthorized() else {
@@ -60,13 +65,15 @@ final class BlockLocation: NSObject, CLLocationManagerDelegate {
         var nearestLabel: String?
         var nearestMiles: Double?
         var atLocation = false
+        var distances: [PlaceDistance] = []
         for place in places {
             let meters = location.distance(from: CLLocation(latitude: place.lat, longitude: place.lng))
             let miles = meters / 1609.34
+            distances.append(PlaceDistance(id: place.id, miles: miles))
             if nearestMiles == nil || miles < nearestMiles! { nearestLabel = place.label; nearestMiles = miles }
             if meters <= place.radiusMiles * 1609.34 { atLocation = true }
         }
-        return CheckResult(atLocation: atLocation, nearestLabel: nearestLabel, nearestMiles: nearestMiles, error: nil)
+        return CheckResult(atLocation: atLocation, nearestLabel: nearestLabel, nearestMiles: nearestMiles, error: nil, distances: distances)
     }
 
     private func ensureAuthorized() async -> Bool {
