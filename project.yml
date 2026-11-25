@@ -296,8 +296,9 @@ targets:
         # App Store Connect and a build only attaches to the version it was built as.
         # 40 (2026-11-25): same code as 38/39, rebuilt as 4.5.6 because Kanyon created a 4.5.6 version on
         # App Store Connect (a build only attaches to the version it was built as).
+        # 41 (2026-11-25): Block adult content fix (iOS "configuration is unchanged" handling) and clock-guard false-positive fix.
         MARKETING_VERSION: "4.5.6"
-        CURRENT_PROJECT_VERSION: "40"
+        CURRENT_PROJECT_VERSION: "41"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
@@ -421,8 +422,9 @@ targets:
         # App Store Connect and a build only attaches to the version it was built as.
         # 40 (2026-11-25): same code as 38/39, rebuilt as 4.5.6 because Kanyon created a 4.5.6 version on
         # App Store Connect (a build only attaches to the version it was built as).
+        # 41 (2026-11-25): Block adult content fix (iOS "configuration is unchanged" handling) and clock-guard false-positive fix.
         MARKETING_VERSION: "4.5.6"
-        CURRENT_PROJECT_VERSION: "40"
+        CURRENT_PROJECT_VERSION: "41"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9
@@ -500,8 +502,9 @@ targets:
         # App Store Connect and a build only attaches to the version it was built as.
         # 40 (2026-11-25): same code as 38/39, rebuilt as 4.5.6 because Kanyon created a 4.5.6 version on
         # App Store Connect (a build only attaches to the version it was built as).
+        # 41 (2026-11-25): Block adult content fix (iOS "configuration is unchanged" handling) and clock-guard false-positive fix.
         MARKETING_VERSION: "4.5.6"
-        CURRENT_PROJECT_VERSION: "40"
+        CURRENT_PROJECT_VERSION: "41"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9

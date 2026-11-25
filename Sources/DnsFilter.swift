@@ -64,25 +64,56 @@ final class DnsFilter {
     /// Fix: always loadFromPreferences first, build and assign the new
     /// settings inside that completion, then save — same pattern
     /// isEnabled() above already uses correctly.
+    ///
+    /// 2026-11-25, REAL BUG, reported again live ("configuration is unchanged" under the Block
+    /// adult content toggle, protection Off): the load-first fix above is not enough on a phone
+    /// that already has this app's DNS configuration saved. If that saved configuration is
+    /// identical to the one being saved (the normal case when someone switched it off in iPhone
+    /// Settings, or it was never fully enabled), iOS refuses the save with an "unchanged" error
+    /// and the filter stays OFF while the page shows that raw message. Now: (1) already enabled
+    /// with this same server = success, nothing to do; (2) an "unchanged" refusal is not shown as
+    /// an error: re-read the real state, and if it is on, success; (3) if it is still off, remove
+    /// the stale saved configuration and save a fresh one (this brings back the single system
+    /// "Allow DNS Settings" prompt); (4) only if iOS still refuses, a plain instruction. Every path
+    /// only ever turns protection ON; nothing here loosens anything.
     static func enable(token: String?, completion: @escaping (Bool, String?) -> Void) {
         let manager = NEDNSSettingsManager.shared()
-        manager.loadFromPreferences { _ in
+        let base = "https://mtlogos.com/dns-query"
+        let urlString: String
+        if let token, !token.isEmpty { urlString = base + "/" + token } else { urlString = base }
+        func finish(_ ok: Bool, _ message: String?) { DispatchQueue.main.async { completion(ok, message) } }
+        func isUnchanged(_ error: Error) -> Bool { error.localizedDescription.lowercased().contains("unchanged") }
+        func freshSettings() -> NEDNSOverHTTPSSettings {
             let settings = NEDNSOverHTTPSSettings(servers: [])
-            let base = "https://mtlogos.com/dns-query"
-            let urlString: String
-            if let token, !token.isEmpty {
-                urlString = base + "/" + token
-            } else {
-                urlString = base
-            }
             settings.serverURL = URL(string: urlString)
-            manager.dnsSettings = settings
+            return settings
+        }
+        manager.loadFromPreferences { _ in
+            if manager.isEnabled,
+               let current = manager.dnsSettings as? NEDNSOverHTTPSSettings,
+               current.serverURL?.absoluteString == urlString {
+                finish(true, nil)
+                return
+            }
+            manager.dnsSettings = freshSettings()
             manager.saveToPreferences { error in
-                DispatchQueue.main.async {
-                    if let error = error {
-                        completion(false, error.localizedDescription)
-                    } else {
-                        completion(true, nil)
+                guard let error = error else { finish(true, nil); return }
+                guard isUnchanged(error) else { finish(false, error.localizedDescription); return }
+                manager.loadFromPreferences { _ in
+                    if manager.isEnabled { finish(true, nil); return }
+                    manager.removeFromPreferences { _ in
+                        manager.loadFromPreferences { _ in
+                            manager.dnsSettings = freshSettings()
+                            manager.saveToPreferences { error2 in
+                                if let error2 = error2 {
+                                    finish(false, isUnchanged(error2)
+                                           ? "Turn it on in iPhone Settings > General > VPN & Device Management > DNS."
+                                           : error2.localizedDescription)
+                                } else {
+                                    finish(true, nil)
+                                }
+                            }
+                        }
                     }
                 }
             }

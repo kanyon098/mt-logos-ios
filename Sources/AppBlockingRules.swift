@@ -252,6 +252,16 @@ struct ClockIntegrityGuard {
     private static let suiteName = "group.com.mtlogos.app"
     private static let wallKey = "mtlogos.clockCheck.wall"
     private static let uptimeKey = "mtlogos.clockCheck.uptime"
+    // 2026-11-25: the baseline now uses a clock that KEEPS COUNTING WHILE THE PHONE SLEEPS (see
+    // continuousUptime()). The old ProcessInfo.systemUptime stops while the phone is asleep, so any
+    // time the phone was locked for more than 5 minutes made wall-clock time look like it had jumped
+    // ahead of "uptime" and set the tampered flag for no reason (the red "Looked tampered with").
+    // Separate key so an old baseline from the previous clock is never compared with the new one.
+    private static let cuptimeKey = "mtlogos.clockCheck.cuptime"
+    private static let tamperedAtKey = "mtlogos.clockCheck.tamperedAt"
+    private static func continuousUptime() -> Double {
+        Double(clock_gettime_nsec_np(CLOCK_MONOTONIC)) / 1_000_000_000.0
+    }
     private static let tamperedKey = "mtlogos.clockCheck.tampered"
     private static var defaults: UserDefaults? { UserDefaults(suiteName: suiteName) }
 
@@ -264,10 +274,11 @@ struct ClockIntegrityGuard {
     @discardableResult
     static func checkAndRecord() -> Bool {
         let now = Date().timeIntervalSince1970
-        let uptime = ProcessInfo.processInfo.systemUptime
-        defer { defaults?.set(now, forKey: wallKey); defaults?.set(uptime, forKey: uptimeKey) }
+        let uptime = continuousUptime()
+        defer { defaults?.set(now, forKey: wallKey); defaults?.set(uptime, forKey: cuptimeKey) }
         guard let lastWall = defaults?.double(forKey: wallKey), lastWall > 0,
-              let lastUptime = defaults?.double(forKey: uptimeKey) else { return false }
+              defaults?.object(forKey: cuptimeKey) != nil,
+              let lastUptime = defaults?.double(forKey: cuptimeKey) else { return false }
         let wallDelta = now - lastWall
         let uptimeDelta = uptime - lastUptime
         guard uptimeDelta >= 0 else {
@@ -288,7 +299,15 @@ struct ClockIntegrityGuard {
         }
         let drift = abs(wallDelta - uptimeDelta)
         let tampered = drift > 300   // 5-minute tolerance for normal NTP/timezone edge cases
-        if tampered { defaults?.set(true, forKey: tamperedKey) }
+        if tampered {
+            defaults?.set(true, forKey: tamperedKey)
+            defaults?.set(now, forKey: tamperedAtKey)
+        } else if defaults?.bool(forKey: tamperedKey) == true {
+            // The flag still keeps shields from lifting while it is set. With the visible Dismiss link gone,
+            // it clears itself once the clock has read clean for an hour (stricter than the old instant Dismiss).
+            let at = defaults?.double(forKey: tamperedAtKey) ?? 0
+            if at == 0 || now - at > 3600 { defaults?.set(false, forKey: tamperedKey) }
+        }
         return tampered
     }
 
@@ -312,7 +331,10 @@ struct ClockIntegrityGuard {
             formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
             guard let serverDate = formatter.date(from: dateString) else { return }
             let drift = abs(Date().timeIntervalSince1970 - serverDate.timeIntervalSince1970)
-            if drift > 300 { defaults?.set(true, forKey: tamperedKey) }
+            if drift > 300 {
+                defaults?.set(true, forKey: tamperedKey)
+                defaults?.set(Date().timeIntervalSince1970, forKey: tamperedAtKey)
+            }
         }.resume()
     }
 
@@ -335,6 +357,6 @@ struct ClockIntegrityGuard {
     static func clearTamperFlag() {
         defaults?.set(false, forKey: tamperedKey)
         defaults?.set(Date().timeIntervalSince1970, forKey: wallKey)
-        defaults?.set(ProcessInfo.processInfo.systemUptime, forKey: uptimeKey)
+        defaults?.set(continuousUptime(), forKey: cuptimeKey)
     }
 }
