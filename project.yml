@@ -300,9 +300,9 @@ targets:
         # 40 (2026-11-25): same code as 38/39, rebuilt as 4.5.6 because Kanyon created a 4.5.6 version on
         # App Store Connect (a build only attaches to the version it was built as).
         # 41 (2026-11-25): Block adult content fix (iOS "configuration is unchanged" handling) and clock-guard false-positive fix.
-        # 42 (2026-11-26): per-app location rules (map allow/block). Branch build only until Kanyon says go.
-        MARKETING_VERSION: "4.5.6"
-        CURRENT_PROJECT_VERSION: "42"
+        # 43 (2026-11-26): version 4.5.7: per-app location rules (map allow/block), uninstall/App Store switch read fix. Kanyon gave go to upload to TestFlight.
+        MARKETING_VERSION: "4.5.7"
+        CURRENT_PROJECT_VERSION: "43"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"          # iPhone only
         DEVELOPMENT_TEAM: QKPAT27SX9          # Mt. Logos, LLC
@@ -427,9 +427,9 @@ targets:
         # 40 (2026-11-25): same code as 38/39, rebuilt as 4.5.6 because Kanyon created a 4.5.6 version on
         # App Store Connect (a build only attaches to the version it was built as).
         # 41 (2026-11-25): Block adult content fix (iOS "configuration is unchanged" handling) and clock-guard false-positive fix.
-        # 42 (2026-11-26): per-app location rules (map allow/block). Branch build only until Kanyon says go.
-        MARKETING_VERSION: "4.5.6"
-        CURRENT_PROJECT_VERSION: "42"
+        # 43 (2026-11-26): version 4.5.7: per-app location rules (map allow/block), uninstall/App Store switch read fix. Kanyon gave go to upload to TestFlight.
+        MARKETING_VERSION: "4.5.7"
+        CURRENT_PROJECT_VERSION: "43"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9
@@ -508,9 +508,9 @@ targets:
         # 40 (2026-11-25): same code as 38/39, rebuilt as 4.5.6 because Kanyon created a 4.5.6 version on
         # App Store Connect (a build only attaches to the version it was built as).
         # 41 (2026-11-25): Block adult content fix (iOS "configuration is unchanged" handling) and clock-guard false-positive fix.
-        # 42 (2026-11-26): per-app location rules (map allow/block). Branch build only until Kanyon says go.
-        MARKETING_VERSION: "4.5.6"
-        CURRENT_PROJECT_VERSION: "42"
+        # 43 (2026-11-26): version 4.5.7: per-app location rules (map allow/block), uninstall/App Store switch read fix. Kanyon gave go to upload to TestFlight.
+        MARKETING_VERSION: "4.5.7"
+        CURRENT_PROJECT_VERSION: "43"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1"
         DEVELOPMENT_TEAM: QKPAT27SX9
