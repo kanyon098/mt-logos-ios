@@ -1,5 +1,7 @@
+import CoreLocation
 import FamilyControls
 import ManagedSettings
+import MapKit
 import SwiftUI
 
 /* Per-app conditional blocking rules — the UI half of AppBlockingRules.swift. Native,
@@ -64,6 +66,7 @@ struct AppRuleListView: View {
     private func summary(for rule: AppBlockRule, token: ApplicationToken? = nil) -> String {
         if let token, stillPending.contains(token) { return "Not blocked yet" }
         if rule.isFullyBlocked { return "Blocked" }
+        if rule.location != nil { return rule.unlockWindows.isEmpty ? "Location only" : "Scheduled + location" }
         if rule.sessionLimitMinutes != nil { return "Scheduled, limited" }
         if rule.cooldownMinutes != nil { return "Scheduled, cooldown" }
         if rule.budgetMinutes != nil { return "Scheduled, budget" }
@@ -95,6 +98,9 @@ struct AppRuleEditView: View {
     @State private var hasBudget: Bool
     @State private var hasCooldown: Bool
     @State private var hasSessionLimit: Bool
+    // 2026-11-26: per-app location rule (see LocationRule in AppBlockingRules.swift).
+    @State private var hasLocation: Bool
+    @State private var distanceText: String? = nil
 
     init(rule: AppBlockRule, canEdit: Bool, isPending: Bool = false, onConfirm: @escaping (AppBlockRule) -> Void = { _ in }, onChange: @escaping (AppBlockRule) -> Void) {
         _rule = State(initialValue: rule)
@@ -107,6 +113,7 @@ struct AppRuleEditView: View {
         _hasBudget = State(initialValue: rule.budgetMinutes != nil)
         _hasCooldown = State(initialValue: rule.cooldownMinutes != nil)
         _hasSessionLimit = State(initialValue: rule.sessionLimitMinutes != nil)
+        _hasLocation = State(initialValue: rule.location != nil)
     }
 
     var body: some View {
@@ -120,7 +127,7 @@ struct AppRuleEditView: View {
                         .onChange(of: fullBlock) { on in
                             if on {
                                 rule = AppBlockRule()
-                                hasWindows = false; hasBudget = false; hasCooldown = false; hasSessionLimit = false
+                                hasWindows = false; hasBudget = false; hasCooldown = false; hasSessionLimit = false; hasLocation = false
                             }
                         }
                     Button("Save") {
@@ -129,10 +136,10 @@ struct AppRuleEditView: View {
                         lastGoodRule = rule
                         isPending = false
                     }
-                    .disabled(!(fullBlock || hasWindows))
+                    .disabled(!(fullBlock || hasWindows || rule.location != nil))
                 }
             }
-            Section(footer: Text("Off: blocked all day, every day. On: only unlocked during times you set below.")) {
+            Section(footer: Text("Off: blocked all day, every day (unless a location rule below decides). On: only unlocked during times you set below.")) {
                 Toggle("Unlock at specific times", isOn: $hasWindows.animation())
                     .onChange(of: hasWindows) { on in
                         if on, rule.unlockWindows.isEmpty { rule.unlockWindows = [TimeWindow(startMinute: 8*60, endMinute: 20*60)] }
@@ -155,6 +162,53 @@ struct AppRuleEditView: View {
                         if !on { rule.unlockWindows = []; hasBudget = false; hasCooldown = false; hasSessionLimit = false }
                         commit()
                     }
+            }
+
+            // 2026-11-26, Kanyon: a map rule per app. COMBINES with the times above as AND: the app opens only when the
+            // time rule allows AND the location rule allows. No times set = no time limit, location alone decides.
+            Section(footer: Text(locationFooter)) {
+                Toggle("Location rule", isOn: $hasLocation.animation())
+                    .onChange(of: hasLocation) { on in
+                        if on {
+                            fullBlock = false
+                            useMyLocation()
+                        } else {
+                            rule.location = nil
+                            distanceText = nil
+                            commit()
+                        }
+                    }
+            }
+            if hasLocation {
+                Section("Location") {
+                    Picker("Inside the circle", selection: Binding(
+                        get: { rule.location?.allowInside ?? true },
+                        set: { v in if var l = rule.location { l.allowInside = v; rule.location = l; commit() } }
+                    )) {
+                        Text("App allowed").tag(true)
+                        Text("App blocked").tag(false)
+                    }.pickerStyle(.segmented)
+                    RuleMapPicker(
+                        coordinate: rule.location.map { CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lng) },
+                        radius: rule.location?.radiusMeters ?? 500,
+                        onPick: { c in setPin(c) }
+                    )
+                    .frame(height: 220)
+                    .listRowInsets(EdgeInsets())
+                    Button("Use my current location") { useMyLocation() }
+                    if let loc = rule.location {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Radius: \(Self.radiusText(loc.radiusMeters))")
+                            Slider(value: Binding(
+                                get: { loc.radiusMeters },
+                                set: { v in if var l = rule.location { l.radiusMeters = v; rule.location = l } }
+                            ), in: 100...5000, step: 50, onEditingChanged: { editing in if !editing { commit() } })
+                        }
+                        if let distanceText { Text(distanceText).font(.caption).foregroundColor(.secondary) }
+                    } else {
+                        Text("Press and hold on the map to drop a pin.").font(.caption).foregroundColor(.secondary)
+                    }
+                }
             }
 
             if hasWindows {
@@ -241,6 +295,48 @@ struct AppRuleEditView: View {
         .navigationBarTitleDisplayMode(.inline)
     }
 
+    private var locationFooter: String {
+        var s = "Pick a place and a radius: inside it this app is either allowed or blocked. It works together with the times above: the app opens only when BOTH allow."
+        if !LocationRuleMonitor.shared.hasAlwaysAccess {
+            s += " To work while Mt. Logos is closed, set Location to Always in iPhone Settings > Mt. Logos > Location. Until then the app stays blocked."
+        }
+        return s
+    }
+
+    private static func radiusText(_ meters: Double) -> String {
+        let feet = meters * 3.28084
+        if feet < 1000 { return "\(Int((feet / 10).rounded()) * 10) ft" }
+        return String(format: "%.1f mi", meters / 1609.34)
+    }
+
+    private func setPin(_ c: CLLocationCoordinate2D) {
+        var l = rule.location ?? LocationRule(lat: c.latitude, lng: c.longitude, radiusMeters: 500, allowInside: true)
+        l.lat = c.latitude
+        l.lng = c.longitude
+        rule.location = l
+        commit()
+        refreshDistance()
+    }
+
+    private func useMyLocation() {
+        Task { @MainActor in
+            if let here = await BlockLocation.shared.currentCoordinate() {
+                setPin(CLLocationCoordinate2D(latitude: here.lat, longitude: here.lng))
+            }
+        }
+    }
+
+    private func refreshDistance() {
+        guard let loc = rule.location else { distanceText = nil; return }
+        Task { @MainActor in
+            if let mi = await BlockLocation.shared.distanceMiles(toLat: loc.lat, lng: loc.lng) {
+                distanceText = mi < 0.1 ? "You are at this pin." : String(format: "You are %.1f mi from this pin.", mi)
+            } else {
+                distanceText = nil
+            }
+        }
+    }
+
     /// 2026-10-30, Kanyon: "you should be able to make any blocking more tight while
     /// the block is active, but not less tight unless the partner unlocks it." Every
     /// control above already mutates `rule` (and the matching has* flag) before
@@ -271,6 +367,64 @@ struct AppRuleEditView: View {
         hasBudget = rule.budgetMinutes != nil
         hasCooldown = rule.cooldownMinutes != nil
         hasSessionLimit = rule.sessionLimitMinutes != nil
+        hasLocation = rule.location != nil
+    }
+}
+
+/// Small MapKit picker: press and hold drops the pin, a circle shows the radius. Plain Apple MapKit, no paid service.
+private struct RuleMapPicker: UIViewRepresentable {
+    let coordinate: CLLocationCoordinate2D?
+    let radius: Double
+    let onPick: (CLLocationCoordinate2D) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(onPick: onPick) }
+
+    func makeUIView(context: Context) -> MKMapView {
+        let map = MKMapView()
+        map.delegate = context.coordinator
+        map.showsUserLocation = true
+        let press = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.pressed(_:)))
+        press.minimumPressDuration = 0.4
+        map.addGestureRecognizer(press)
+        return map
+    }
+
+    func updateUIView(_ map: MKMapView, context: Context) {
+        context.coordinator.onPick = onPick
+        map.removeOverlays(map.overlays)
+        map.removeAnnotations(map.annotations.filter { !($0 is MKUserLocation) })
+        guard let c = coordinate else { return }
+        let pin = MKPointAnnotation()
+        pin.coordinate = c
+        map.addAnnotation(pin)
+        map.addOverlay(MKCircle(center: c, radius: radius))
+        if !context.coordinator.didCenter || context.coordinator.lastCenter.map({ abs($0.latitude - c.latitude) > 1e-6 || abs($0.longitude - c.longitude) > 1e-6 }) ?? true {
+            let span = max(radius * 4, 800)
+            map.setRegion(MKCoordinateRegion(center: c, latitudinalMeters: span, longitudinalMeters: span), animated: false)
+            context.coordinator.didCenter = true
+            context.coordinator.lastCenter = c
+        }
+    }
+
+    final class Coordinator: NSObject, MKMapViewDelegate {
+        var onPick: (CLLocationCoordinate2D) -> Void
+        var didCenter = false
+        var lastCenter: CLLocationCoordinate2D?
+        init(onPick: @escaping (CLLocationCoordinate2D) -> Void) { self.onPick = onPick }
+
+        @objc func pressed(_ g: UILongPressGestureRecognizer) {
+            guard g.state == .began, let map = g.view as? MKMapView else { return }
+            onPick(map.convert(g.location(in: map), toCoordinateFrom: map))
+        }
+
+        func mapView(_ mapView: MKMapView, rendererFor overlay: MKOverlay) -> MKOverlayRenderer {
+            guard let circle = overlay as? MKCircle else { return MKOverlayRenderer(overlay: overlay) }
+            let r = MKCircleRenderer(circle: circle)
+            r.strokeColor = UIColor.systemGreen
+            r.fillColor = UIColor.systemGreen.withAlphaComponent(0.15)
+            r.lineWidth = 2
+            return r
+        }
     }
 }
 

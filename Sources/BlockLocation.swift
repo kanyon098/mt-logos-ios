@@ -76,6 +76,18 @@ final class BlockLocation: NSObject, CLLocationManagerDelegate {
         return CheckResult(atLocation: atLocation, nearestLabel: nearestLabel, nearestMiles: nearestMiles, error: nil, distances: distances)
     }
 
+    /// 2026-11-26: the phone's current position, for the app-rule map ("Use my location", "you are 1.4 mi from this pin").
+    /// Reuses the same On-demand When In Use check as everything else in this file; nothing is stored.
+    func currentCoordinate() async -> (lat: Double, lng: Double)? {
+        guard await ensureAuthorized(), let here = await currentLocation() else { return nil }
+        return (here.coordinate.latitude, here.coordinate.longitude)
+    }
+
+    func distanceMiles(toLat lat: Double, lng: Double) async -> Double? {
+        guard await ensureAuthorized(), let here = await currentLocation() else { return nil }
+        return here.distance(from: CLLocation(latitude: lat, longitude: lng)) / 1609.34
+    }
+
     private func ensureAuthorized() async -> Bool {
         switch manager.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways:

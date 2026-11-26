@@ -97,6 +97,12 @@ class MonitorExtension: DeviceActivityMonitor {
             return
         }
         let rule = AppBlockingRulesStore.shared.rule(for: token)
+        // 2026-11-26: a location rule must ALSO allow (time AND location). Unknown location stays shielded.
+        if rule.location != nil,
+           !rule.locationAllows(inside: AppBlockingRulesStore.shared.locationInside(for: token)) {
+            shield(token)
+            return
+        }
         // 2026-10-12 fix: a later window in the same day/week used to silently undo an
         // already-earned budget/session shield, since nothing here checked whether
         // THIS period's threshold had already fired — see thresholdFiredPeriodKey's

@@ -35,7 +35,28 @@ enum BudgetPeriod: String, Codable {
     case day, week
 }
 
+/// 2026-11-26, Kanyon: a per-app location rule. `allowInside == true`: the app can only be used while this phone is
+/// inside the circle. `false`: the app is blocked while inside the circle. Only a pin (lat/lng), a radius and a mode;
+/// no place name is ever stored here. COMBINES WITH THE TIME RULE AS "AND": the app opens only when the time rule allows
+/// AND the location rule allows. With no unlock windows set, the time rule imposes no limit (it does not mean "blocked
+/// all day" any more once a location rule exists). Unknown location (permission off, no fix yet) = stays blocked.
+struct LocationRule: Codable, Hashable {
+    var lat: Double
+    var lng: Double
+    var radiusMeters: Double      // clamped 100...5000 by the editor
+    var allowInside: Bool
+}
+
 struct AppBlockRule: Codable, Hashable {
+    /// Optional location rule (see LocationRule). Old saved rules simply decode with nil.
+    var location: LocationRule? = nil
+    /// Whether this rule allows use right now as far as LOCATION goes. `inside` is the stored last-known state
+    /// (nil = never determined = not allowed, fail closed).
+    func locationAllows(inside: Bool?) -> Bool {
+        guard let loc = location else { return true }
+        guard let inside else { return false }
+        return inside == loc.allowInside
+    }
     /// Tier 1. Empty = fully blocked all day, every day (the default — nothing else
     /// below means anything until this has at least one window in it).
     var unlockWindows: [TimeWindow] = []
@@ -47,7 +68,7 @@ struct AppBlockRule: Codable, Hashable {
     /// Tier 4. Only meaningful once cooldownMinutes is set.
     var sessionLimitMinutes: Int? = nil
 
-    var isFullyBlocked: Bool { unlockWindows.isEmpty }
+    var isFullyBlocked: Bool { unlockWindows.isEmpty && location == nil }
 
     /// Clears any tier whose prerequisite tier is no longer set — keeps a rule from
     /// ending up with e.g. a session limit but no cooldown, which the UI's progressive
@@ -79,9 +100,26 @@ private func windowContainedInUnion(_ w: TimeWindow, _ oldWindows: [TimeWindow])
 /// Short-circuits the moment either side is "fully blocked" (unlockWindows empty) —
 /// that's the tightest possible state regardless of what any deeper tier says, so
 /// nothing past tier 1 is a meaningful comparison once that's true on either side.
+/// Location part of "is this change at least as strict" (2026-11-26). Conservative on purpose: anything it cannot prove
+/// is stricter counts as a loosening, so it goes through the same partner-approval gate as every other loosening.
+private func locationIsTighterOrEqual(old: AppBlockRule, new: AppBlockRule) -> Bool {
+    switch (old.location, new.location) {
+    case (nil, nil): return true
+    case (nil, .some): return true          // adding a location rule on top of time windows only restricts further
+    case (.some, nil): return false         // removing a location rule is a loosening
+    case (.some(let o), .some(let n)):
+        if o == n { return true }
+        guard abs(o.lat - n.lat) < 1e-6, abs(o.lng - n.lng) < 1e-6, o.allowInside == n.allowInside else { return false }
+        return o.allowInside ? n.radiusMeters <= o.radiusMeters : n.radiusMeters >= o.radiusMeters
+    }
+}
+
 func appBlockRuleIsTighterOrEqual(from old: AppBlockRule, to new: AppBlockRule) -> Bool {
-    if new.unlockWindows.isEmpty { return true }    // going fully blocked is always fine
-    if old.unlockWindows.isEmpty { return false }    // had none, now has some — a loosening
+    if new.isFullyBlocked { return true }    // going fully blocked is always fine
+    if old.isFullyBlocked { return false }    // had nothing, now has something — a loosening
+    guard locationIsTighterOrEqual(old: old, new: new) else { return false }
+    if new.unlockWindows.isEmpty { return old.unlockWindows.isEmpty }   // dropping the time limit is a loosening
+    if old.unlockWindows.isEmpty { return true }                        // adding a time limit to a location-only rule is stricter
     guard new.unlockWindows.allSatisfy({ windowContainedInUnion($0, old.unlockWindows) }) else { return false }
     guard windowsCoverMinutes(new.unlockWindows) <= windowsCoverMinutes(old.unlockWindows) else { return false }
     // Budget (tier 2): nil = no cap = loosest; a smaller cap is tighter.
@@ -134,6 +172,8 @@ func describeRuleLoosening(from old: AppBlockRule, to new: AppBlockRule) -> Stri
     case (.some(let o), .some(let n)) where n > o: parts.append("session limit \(o) to \(n) min")
     default: break
     }
+    // Action wording only: never a place name or coordinates (2026-11-26).
+    if old.location != new.location { parts.append("changed a location rule") }
     return parts.isEmpty ? "loosened a limit" : parts.joined(separator: "; ")
 }
 
@@ -171,6 +211,17 @@ final class AppBlockingRulesStore {
         normalized.normalize()
         all[token] = normalized
         saveAll(all)
+    }
+
+    /// Last known inside/outside state for an app's location rule, written by the main app's LocationRuleMonitor and
+    /// read by the monitor extension before it lifts a shield. nil = unknown = treated as NOT allowed.
+    func locationInside(for token: ApplicationToken) -> Bool? {
+        defaults?.object(forKey: "mtlogos.locInside." + tokenKey(token)) as? Bool
+    }
+
+    func setLocationInside(_ inside: Bool?, for token: ApplicationToken) {
+        let k = "mtlogos.locInside." + tokenKey(token)
+        if let inside { defaults?.set(inside, forKey: k) } else { defaults?.removeObject(forKey: k) }
     }
 
     func removeRule(for token: ApplicationToken) {

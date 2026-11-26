@@ -250,6 +250,7 @@ final class AppBlocking {
         ClockIntegrityGuard.checkAndRecord()
         let selection = loadSelection()
         applyShield(selection)
+        LocationRuleMonitor.shared.sync()   // 2026-11-26: re-lift any app whose location rule currently allows it
     }
 
     /// Whether the clock looked tampered with on the most recent check (main app or the
@@ -384,11 +385,13 @@ final class AppBlocking {
                 guard let self else { return }
                 self.applyRule(rule, for: token)
                 self.confirmPending(token)
+                LocationRuleMonitor.shared.sync()
             },
             onSave: { [weak self] token, rule in
                 guard let self else { return }
                 let old = AppBlockingRulesStore.shared.rule(for: token)
                 self.applyRule(rule, for: token)
+                LocationRuleMonitor.shared.sync()
                 // AppRuleEditView already only lets a loosening edit through when
                 // canEdit is true (reverting it otherwise) — this just decides whether
                 // what DID land is worth telling the partner about.
