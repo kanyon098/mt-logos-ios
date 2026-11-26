@@ -86,13 +86,21 @@ final class AppBlocking {
     /// but this kept reporting "Protected" regardless. Same real fix as
     /// DnsFilter.isEnabled()'s 2026-10-12 bug: stop trusting intent, check
     /// what's actually still true.
+    /// 2026-11-26, REAL BUG (same family as the Screen Time switch): this READ used to write `false` into the saved flag
+    /// whenever isScreenTimeAuthorized() was false at that instant. Right after launch or coming back to the app iOS can
+    /// briefly report an unsettled authorization, so a harmless status read silently switched the setting off (and
+    /// reapplyAppStoreBlock() then never re-applied it) while the real ManagedSettings block was still active.
+    /// Now a read NEVER changes anything. It reports what is really true: the block is on if the device store still has
+    /// it, or the saved intent says on; only an explicitly DENIED Family Controls authorization counts as revoked.
     func isAppStoreBlocked() -> Bool {
-        let flagged = UserDefaults.standard.bool(forKey: appStoreBlockedKey)
-        if flagged && !isScreenTimeAuthorized() {
-            UserDefaults.standard.set(false, forKey: appStoreBlockedKey)
-            return false
-        }
-        return flagged
+        if isScreenTimeDenied() { return false }
+        let actual = store.application.blockedApplications?.contains(where: { $0.bundleIdentifier == appStoreBundleID }) ?? false
+        return actual || UserDefaults.standard.bool(forKey: appStoreBlockedKey)
+    }
+
+    /// True only when the person has explicitly turned Screen Time access off (not merely "not settled yet").
+    func isScreenTimeDenied() -> Bool {
+        AuthorizationCenter.shared.authorizationStatus == .denied
     }
 
     /// Re-applies on every launch, same reasoning as reapplySavedShield() below — a
@@ -152,18 +160,21 @@ final class AppBlocking {
     /// authorization here can't make denyAppRemoval itself more reliable
     /// (that ceiling is Apple's, not this app's), but it stops this toggle
     /// from lying about whether it's actually still in effect.
+    /// 2026-11-26, REAL BUG, reported live ("block uninstalling apps keeps turning itself OFF in the UI while the
+    /// protection is clearly working"): this READ used to clear the saved flag whenever isScreenTimeAuthorized() was false
+    /// at that moment (often just after launch or returning to the app). The device-level denyAppRemoval stayed on, but
+    /// the flag was gone, so the switch read off and reapplyDeletionBlock() never ran again. A read now never changes
+    /// anything: it reports the real device state (denyAppRemoval) or the saved intent, and only an explicitly DENIED
+    /// Screen Time authorization counts as revoked.
     func isDeletionBlocked() -> Bool {
-        let flagged = UserDefaults.standard.bool(forKey: deletionBlockedKey)
-        if flagged && !isScreenTimeAuthorized() {
-            UserDefaults.standard.set(false, forKey: deletionBlockedKey)
-            return false
-        }
-        return flagged
+        if isScreenTimeDenied() { return false }
+        let actual = store.application.denyAppRemoval ?? false
+        return actual || UserDefaults.standard.bool(forKey: deletionBlockedKey)
     }
 
     /// Re-applies on every launch, same reasoning as reapplyAppStoreBlock() above.
     func reapplyDeletionBlock() {
-        if isDeletionBlocked() { store.application.denyAppRemoval = true }
+        if isDeletionBlocked() && store.application.denyAppRemoval != true { store.application.denyAppRemoval = true }
     }
 
     /// Requests the Family Controls authorization prompt (the one system "Screen Time"
