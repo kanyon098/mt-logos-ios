@@ -710,7 +710,7 @@ private struct OfflineView: View {
             Image(systemName: "wifi.slash")
                 .font(.system(size: 44))
                 .foregroundColor(.white.opacity(0.7))
-            Text("Can't reach Mt. Logos")
+            Text("Can't reach Switchback")
                 .font(.headline)
                 .foregroundColor(.white)
             Text("Check your connection and try again.")

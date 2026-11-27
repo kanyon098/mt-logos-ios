@@ -298,7 +298,7 @@ struct AppRuleEditView: View {
     private var locationFooter: String {
         var s = "Pick a place and a radius: inside it this app is either allowed or blocked. It works together with the times above: the app opens only when BOTH allow."
         if !LocationRuleMonitor.shared.hasAlwaysAccess {
-            s += " To work while Mt. Logos is closed, set Location to Always in iPhone Settings > Mt. Logos > Location. Until then the app stays blocked."
+            s += " To work while Switchback is closed, set Location to Always in iPhone Settings > Switchback > Location. Until then the app stays blocked."
         }
         return s
     }

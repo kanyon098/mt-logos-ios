@@ -51,7 +51,7 @@ final class BlockLocation: NSObject, CLLocationManagerDelegate {
     func check() async -> CheckResult {
         guard await ensureAuthorized() else {
             return CheckResult(atLocation: false, nearestLabel: nil, nearestMiles: nil,
-                                error: "No location permission — turn it on in iPhone Settings \u{2192} Mt. Logos \u{2192} Location.")
+                                error: "No location permission — turn it on in iPhone Settings \u{2192} Switchback \u{2192} Location.")
         }
         async let locationTask = currentLocation()
         async let placesTask = fetchPlaces()
